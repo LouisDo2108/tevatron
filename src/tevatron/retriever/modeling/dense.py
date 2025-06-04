@@ -1,6 +1,8 @@
-import torch
 import logging
+
+import torch
 from transformers import Qwen2_5OmniThinkerForConditionalGeneration
+
 from .encoder import EncoderModel
 
 logger = logging.getLogger(__name__)
@@ -12,11 +14,10 @@ class DenseModel(EncoderModel):
         query_hidden_states = self.encoder(**qry, return_dict=True)
         query_hidden_states = query_hidden_states.last_hidden_state
         return self._pooling(query_hidden_states, qry['attention_mask'])
-    
+
     def encode_passage(self, psg):
         # encode passage is the same as encode query
         return self.encode_query(psg)
-        
 
     def _pooling(self, last_hidden_state, attention_mask):
         if self.pooling in ['cls', 'first']:

@@ -1,15 +1,14 @@
-import random
+import logging
 import os
+import random
 from typing import List, Tuple
 
 from datasets import load_dataset, load_from_disk
-from torch.utils.data import Dataset
 from PIL import Image
+from torch.utils.data import Dataset
+from tqdm import tqdm
 
 from tevatron.retriever.arguments import DataArguments
-
-import logging
-from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 

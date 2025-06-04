@@ -1,6 +1,7 @@
 import os
 from dataclasses import dataclass, field
 from typing import Optional
+
 from transformers import TrainingArguments
 
 
@@ -98,7 +99,10 @@ class DataArguments:
     )
 
     dataset_cache_dir: Optional[str] = field(
-        default=None, metadata={"help": "Where do you want to store the data downloaded from huggingface"}
+        default="/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/tevatron",
+        metadata={
+            "help": "Where do you want to store the data downloaded from huggingface"
+        },
     )
 
     corpus_name: str = field(
@@ -110,7 +114,8 @@ class DataArguments:
     )
 
     corpus_path: str = field(
-        default=None, metadata={"help": "Path to local corpus files or directory"}
+        default="/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/tevatron",
+        metadata={"help": "Path to local corpus files or directory"},
     )
 
     corpus_split: str = field(
@@ -144,7 +149,6 @@ class DataArguments:
 
     encode_is_query: bool = field(default=False)
     encode_output_path: str = field(default=None, metadata={"help": "where to save the encode"})
-
 
     query_max_len: Optional[int] = field(
         default=32,
@@ -199,9 +203,9 @@ class DataArguments:
     )
 
 
-
 @dataclass
 class TevatronTrainingArguments(TrainingArguments):
+    output_dir: str = field(default="/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron")
     warmup_ratio: float = field(default=0.1)
 
     grad_cache: bool = field(default=False, metadata={"help": "Use gradient cache update"})

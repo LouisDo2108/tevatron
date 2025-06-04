@@ -1,17 +1,17 @@
+import logging
 from dataclasses import dataclass
 from typing import Dict, Optional
 
 import torch
 import torch.distributed as dist
-from torch import nn, Tensor
-
-from transformers import PreTrainedModel, AutoModel
-from peft import LoraConfig, TaskType, get_peft_model, PeftModel
-
+from peft import LoraConfig, PeftModel, TaskType, get_peft_model
+from torch import Tensor, nn
+from transformers import AutoModel, PreTrainedModel
 from transformers.file_utils import ModelOutput
-from tevatron.retriever.arguments import ModelArguments, TevatronTrainingArguments as TrainingArguments
 
-import logging
+from tevatron.retriever.arguments import ModelArguments
+from tevatron.retriever.arguments import TevatronTrainingArguments as TrainingArguments
+
 logger = logging.getLogger(__name__)
 
 
@@ -40,6 +40,7 @@ class EncoderModel(nn.Module):
         self.temperature = temperature
         self.cross_entropy = nn.CrossEntropyLoss(reduction='mean')
         self.is_ddp = dist.is_initialized()
+        self._keys_to_ignore_on_save = None
         if self.is_ddp:
             self.process_rank = dist.get_rank()
             self.world_size = dist.get_world_size()
@@ -92,7 +93,7 @@ class EncoderModel(nn.Module):
 
     def compute_loss(self, scores, target):
         return self.cross_entropy(scores, target)
-    
+
     def gradient_checkpointing_enable(self, **kwargs):
         self.encoder.model.gradient_checkpointing_enable()
 

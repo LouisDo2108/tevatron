@@ -1,12 +1,12 @@
 import logging
-from typing import List, Tuple
 from dataclasses import dataclass
-from transformers import PreTrainedTokenizer, ProcessorMixin
-from qwen_omni_utils import process_mm_info
+from typing import List, Tuple
+
 from PIL import Image
+from qwen_vl_utils import process_vision_info
+from transformers import PreTrainedTokenizer, ProcessorMixin
 
 from tevatron.retriever.arguments import DataArguments
-
 
 logger = logging.getLogger(__name__)
 
@@ -354,4 +354,3 @@ class VllmMultiModalEncodeCollator(MultiModalEncodeCollator):
         audio_inputs, image_inputs, video_inputs = process_mm_info(messages, use_audio_in_video=False)
         
         return content_ids, texts, image_inputs
-

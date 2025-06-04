@@ -3,23 +3,19 @@ import os
 import pickle
 import sys
 from contextlib import nullcontext
+from pprint import pprint
 
 import numpy as np
-from tqdm import tqdm
-
 import torch
-
 from torch.utils.data import DataLoader
-from transformers import AutoTokenizer
-from transformers import (
-    HfArgumentParser,
-)
+from tqdm import tqdm
+from transformers import AutoTokenizer, HfArgumentParser
 
-from tevatron.retriever.arguments import ModelArguments, DataArguments, \
-    TevatronTrainingArguments as TrainingArguments
-from tevatron.retriever.dataset import EncodeDataset
+from tevatron.retriever.arguments import DataArguments, ModelArguments
+from tevatron.retriever.arguments import TevatronTrainingArguments as TrainingArguments
 from tevatron.retriever.collator import EncodeCollator
-from tevatron.retriever.modeling import EncoderOutput, DenseModel
+from tevatron.retriever.dataset import EncodeDataset
+from tevatron.retriever.modeling import DenseModel, EncoderOutput
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +40,6 @@ def main():
         level=logging.INFO if training_args.local_rank in [-1, 0] else logging.WARN,
     )
 
-
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
         cache_dir=model_args.cache_dir
@@ -59,7 +54,7 @@ def main():
         torch_dtype = torch.float16
     else:
         torch_dtype = torch.float32
-    
+
     model = DenseModel.load(
         model_args.model_name_or_path,
         pooling=model_args.pooling,
@@ -79,6 +74,13 @@ def main():
         tokenizer=tokenizer,
     )
 
+    print("\n######### Dataset arguments ######### \n")
+    pprint(data_args)
+    print("\n######### Model arguments ######### \n")
+    pprint(model_args)
+    print("\n######### Training arguments ######### \n")
+    pprint(training_args)
+
     encode_loader = DataLoader(
         encode_dataset,
         batch_size=training_args.per_device_eval_batch_size,
@@ -87,6 +89,7 @@ def main():
         drop_last=False,
         num_workers=training_args.dataloader_num_workers,
     )
+
     encoded = []
     lookup_indices = []
     model = model.to(training_args.device)
@@ -107,7 +110,7 @@ def main():
 
     encoded = np.concatenate(encoded)
 
-    with open(data_args.encode_output_path, 'wb') as f:
+    with open(data_args.encode_output_path, "wb") as f:
         pickle.dump((encoded, lookup_indices), f)
 
 
