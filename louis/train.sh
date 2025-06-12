@@ -33,40 +33,73 @@ cd /home/thuy0050/code/tevatron
 
 DATA_ROOT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/data/third_work
 OUTPUT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron
-EXP_NAME=model_scifact_bge
+EXP_NAME=model_scifact
 
 # ==== TRAIN RETRIEVER ====
 python src/tevatron/retriever/driver/train.py \
   --do_train \
   --fp16 \
-  --per_device_train_batch_size 32 \
+  --per_device_train_batch_size 2 \
   --learning_rate 1e-5 \
   --num_train_epochs 1 \
   --attn_implementation sdpa \
   --dataset_name Tevatron/scifact \
-  --model_name_or_path BAAI/bge-base-en-v1.5 \
+  --model_name_or_path bert-base-uncased \
   --output_dir $OUTPUT_DIR/$EXP_NAME \
   --overwrite_output_dir
 
-# ==== ENCODE CORPUS ==== 
-python src/tevatron/retriever/driver/encode.py \
-  --per_device_eval_batch_size 128 \
-  --passage_max_len 512 \
-  --fp16 \
-  --attn_implementation sdpa \
-  --dataset_name Tevatron/scifact-corpus \
-  --model_name_or_path $OUTPUT_DIR/$EXP_NAME \
-  --encode_output_path $OUTPUT_DIR/$EXP_NAME/corpus_emb.pkl
+# # ==== ENCODE CORPUS ==== 
+# python src/tevatron/retriever/driver/encode.py \
+#   --per_device_eval_batch_size 128 \
+#   --passage_max_len 512 \
+#   --fp16 \
+#   --attn_implementation sdpa \
+#   --dataset_name Tevatron/scifact-corpus \
+#   --model_name_or_path $OUTPUT_DIR/$EXP_NAME \
+#   --encode_output_path $OUTPUT_DIR/$EXP_NAME/corpus_emb.pkl
 
-# ==== ENCODE QUERIES ==== 
-python src/tevatron/retriever/driver/encode.py \
-  --per_device_eval_batch_size 128 \
-  --query_max_len 64 \
-  --fp16 \
-  --attn_implementation sdpa \
-  --encode_is_query \
-  --dataset_name Tevatron/scifact \
-  --dataset_split dev \
-  --model_name_or_path $OUTPUT_DIR/$EXP_NAME \
-  --encode_output_path $OUTPUT_DIR/$EXP_NAME/queries_emb.pkl
-  
+# # ==== ENCODE QUERIES ==== 
+# python src/tevatron/retriever/driver/encode.py \
+#   --per_device_eval_batch_size 512 \
+#   --query_max_len 512 \
+#   --pooling avg \
+#   --normalize \
+#   --attn_implementation sdpa \
+#   --encode_is_query \
+#   --dataset_name $DATA_ROOT_DIR/tevatron/Tevatron___wikipedia-nq \
+#   --dataset_path $DATA_ROOT_DIR/temporal/nobel_prize/test/query.jsonl \
+#   --model_name_or_path /home/thuy0050/mg61_scratch2/thuy0050/exp/ts-retriever/models/Tscontriever \
+#   --encode_output_path $OUTPUT_DIR/$EXP_NAME/queries_emb.pkl \
+#   --overwrite_output_dir
+
+# # ==== RETRIEVAL ====  
+# EMBEDDING_DIR=$OUTPUT_DIR/$EXP_NAME
+# set -f && OMP_NUM_THREADS=12 python -m tevatron.retriever.driver.search \
+#     --query_reps $EMBEDDING_DIR/queries_emb.pkl \
+#     --passage_reps $EMBEDDING_DIR/corpus_emb.pkl \
+#     --depth 100 \
+#     --batch_size 512 \
+#     --save_text \
+#     --save_ranking_to $EMBEDDING_DIR/rank.txt
+
+# # ==== CONVERT TO TREC FORMAT ====  
+# python -m tevatron.utils.format.convert_result_to_trec \
+#     --input $EMBEDDING_DIR/rank.txt \
+#     --output $EMBEDDING_DIR/rank.trec \
+#     --remove_query
+
+# # ==== EVALUATE RESULTS USING PYSERINI ====
+# python -m pyserini.eval.trec_eval -c \
+#   -mP.10 -mrecall.10 -mndcg_cut.10 -mrecip_rank -mmap \
+#   $DATA_ROOT_DIR/temporal/nobel_prize/test/qrel.txt \
+#   $EMBEDDING_DIR/rank.trec
+
+# # ==== CONVERT TO MSMARCO FORMAT ====  
+# python -m tevatron.utils.format.convert_result_to_marco \
+#     --input $EMBEDDING_DIR/rank.txt \
+#     --output $EMBEDDING_DIR/rank.msmarco \
+
+# # Calculate MRR@k with Pyserini's MSMARCO script
+# python -m pyserini.eval.msmarco_passage_eval \
+#   $DATA_ROOT_DIR/temporal/nobel_prize/test/qrel.txt \
+#   $EMBEDDING_DIR/rank.msmarco

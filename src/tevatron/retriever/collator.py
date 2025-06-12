@@ -333,7 +333,7 @@ class VllmMultiModalEncodeCollator(MultiModalEncodeCollator):
                 content.append({'type': 'text', 'text': text})
             if image:
                 content.append({'type': 'image', 'image': image, 'resized_height': 784, 'resized_width': 784})
-                
+
             message = [
                 {
                     'role': 'user',
@@ -350,7 +350,6 @@ class VllmMultiModalEncodeCollator(MultiModalEncodeCollator):
         if self.data_args.append_eos_token:
             texts = [x[0] + '<|endoftext|>' for x in texts]
 
-
         audio_inputs, image_inputs, video_inputs = process_mm_info(messages, use_audio_in_video=False)
-        
+
         return content_ids, texts, image_inputs

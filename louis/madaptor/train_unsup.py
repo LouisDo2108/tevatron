@@ -5,16 +5,17 @@ from copy import deepcopy
 from pdb import set_trace as st
 
 import torch
+from collator import UnsupervisedMAdaptorCollator
+from dataset import UnsupervisedMAdaptorDataset
+from madaptor import UnsupervisedMAdaptorDenseModel
+from trainer import MAdaptorTrainer as Trainer
 from transformers import AutoTokenizer, HfArgumentParser, set_seed
+from transformers.trainer_callback import EarlyStoppingCallback
 from transformers.trainer_utils import get_last_checkpoint
 
 from tevatron.retriever.arguments import DataArguments, ModelArguments
 from tevatron.retriever.arguments import TevatronTrainingArguments as TrainingArguments
-from tevatron.retriever.collator import TrainCollator
-from tevatron.retriever.dataset import TrainDataset
 from tevatron.retriever.gc_trainer import GradCacheTrainer as GCTrainer
-from tevatron.retriever.modeling import DenseModel
-from tevatron.retriever.trainer import TevatronTrainer as Trainer
 
 logger = logging.getLogger(__name__)
 
@@ -84,16 +85,16 @@ def main():
         torch_dtype = torch.float32
         print(f"Training in fp32")
 
-    model = DenseModel.build(
+    model = UnsupervisedMAdaptorDenseModel.build(
         model_args,
         training_args,
         cache_dir=model_args.cache_dir,
-        # torch_dtype=torch_dtype,
+        torch_dtype=torch_dtype,
         attn_implementation=model_args.attn_implementation,
     )
 
-    train_dataset = TrainDataset(data_args)
-    collator = TrainCollator(data_args, tokenizer)
+    train_dataset = UnsupervisedMAdaptorDataset(data_args)
+    collator = UnsupervisedMAdaptorCollator(data_args, tokenizer)
 
     trainer_cls = GCTrainer if training_args.grad_cache else Trainer
     trainer = trainer_cls(
@@ -117,6 +118,7 @@ def main():
     #         cache_dir=model_args.cache_dir,
     #         attn_implementation=model_args.attn_implementation,
     #     )
+
     trainer.train(resume_from_checkpoint=(last_checkpoint is not None))
     trainer.save_model()
     if trainer.is_world_process_zero():

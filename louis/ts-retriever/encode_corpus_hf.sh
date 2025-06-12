@@ -33,7 +33,7 @@ cd /home/thuy0050/code/tevatron
 
 DATA_ROOT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/data/third_work
 OUTPUT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron
-EXP_NAME=ts-retriever_nobel_prize_test_hf
+EXP_NAME=provided_checkpoint_ts-retriever_temporal_nobel
 
 mkdir -p $OUTPUT_DIR/$EXP_NAME
 
@@ -41,12 +41,12 @@ mkdir -p $OUTPUT_DIR/$EXP_NAME
 # ==== ENCODE CORPUS ====
 python src/tevatron/retriever/driver/encode.py \
   --per_device_eval_batch_size 512 \
-  --passage_max_len 512 \
+  --passage_max_len 256 \
   --pooling avg \
   --normalize \
   --attn_implementation sdpa \
   --dataset_name LouisDo2108/temporal-nobel-prize \
-  --dataset_config doc \
+  --dataset_config corpus \
   --encode_output_path $OUTPUT_DIR/$EXP_NAME/corpus_emb.pkl \
   --model_name_or_path /home/thuy0050/mg61_scratch2/thuy0050/exp/ts-retriever/models/Tscontriever \
   --overwrite_output_dir
@@ -54,7 +54,7 @@ python src/tevatron/retriever/driver/encode.py \
 # ==== ENCODE QUERIES ==== 
 python src/tevatron/retriever/driver/encode.py \
   --per_device_eval_batch_size 512 \
-  --query_max_len 512 \
+  --query_max_len 256 \
   --pooling avg \
   --normalize \
   --attn_implementation sdpa \

@@ -52,7 +52,7 @@ class TrainDataset(Dataset):
                 cache_dir=self.data_args.dataset_cache_dir,
                 num_proc=self.data_args.num_proc,
             )
-        
+
         # for video we use assets_path to load the video
         self.corpus_assets_path = corpus_assets_path if corpus_assets_path is not None else self.data_args.assets_path
 
@@ -62,7 +62,6 @@ class TrainDataset(Dataset):
             corpus_ids = self.corpus.select_columns(['docid'])
             docids = corpus_ids['docid']
             self.docid_to_index = {docid: index for index, docid in enumerate(tqdm(docids))}
-
 
     def set_trainer(self, trainer):
         """Sets the trainer for the dataset."""
@@ -298,7 +297,6 @@ class EncodeDataset(Dataset):
             content_image = content.get('image', None)
             content_video = content.get('video', None)
             content_audio = content.get('audio', None)
-
 
         if content_video is not None and self.data_args.encode_video:
             content_video = os.path.join(self.data_args.assets_path, content_video)

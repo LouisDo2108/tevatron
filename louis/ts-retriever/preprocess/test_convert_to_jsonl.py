@@ -27,11 +27,11 @@ def convert_corpus_json_to_jsonl(input_file: str, output_file: str):
 def convert_queries_json_to_queries_qrel_jsonl(input_file: str, output_file: str):
 
     with open(
-        "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/nobel_prize/test/doc.jsonl",
+        "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/nobel_prize/test/corpus.jsonl",
         "rb",
     ) as infile:
         doc_to_docid_dict = decoder.decode_lines(infile.read())
-    docid_to_doc_dict = {v["document_text"]: v["docid"] for v in doc_to_docid_dict}
+    docid_to_doc_dict = {v["docid"]: v["docid"] for v in doc_to_docid_dict}
 
     output_jsonl = []
     with open(input_file, 'rb') as infile:
@@ -63,8 +63,8 @@ def convert_queries_json_to_queries_qrel_jsonl(input_file: str, output_file: str
 
 
 if __name__ == "__main__":
-    # input_file = "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/nobel_prize/test/doc.json"
-    # output_file = "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/nobel_prize/test/doc.jsonl"
+    # input_file = "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/nobel_prize/test/corpus.json"
+    # output_file = "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/nobel_prize/test/corpus.jsonl"
     # convert_corpus_json_to_jsonl(input_file, output_file)
 
     input_file = "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/nobel_prize/test/query.json"

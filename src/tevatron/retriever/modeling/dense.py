@@ -65,7 +65,7 @@ class MultiModalDenseModel(DenseModel):
         query_hidden_states = query_hidden_states.hidden_states[-1]
 
         return self._pooling(query_hidden_states, qry['attention_mask'])
-    
+
     def encode_passage(self, psg):
         # encode passage is the same as encode query
         return self.encode_query(psg)

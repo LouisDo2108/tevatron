@@ -3,19 +3,19 @@ import os
 import pickle
 import sys
 from contextlib import nullcontext
-from pprint import pprint
 
 import numpy as np
 import torch
+from madaptor import UnsupervisedMAdaptorDenseModel, SupervisedMAdaptorDenseModel
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from transformers import AutoTokenizer, HfArgumentParser
+from transformers import AutoTokenizer, HfArgumentParser, set_seed
 
 from tevatron.retriever.arguments import DataArguments, ModelArguments
 from tevatron.retriever.arguments import TevatronTrainingArguments as TrainingArguments
 from tevatron.retriever.collator import EncodeCollator
 from tevatron.retriever.dataset import EncodeDataset
-from tevatron.retriever.modeling import DenseModel, EncoderOutput
+from tevatron.retriever.modeling import EncoderOutput
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +40,8 @@ def main():
         level=logging.INFO if training_args.local_rank in [-1, 0] else logging.WARN,
     )
 
+    set_seed(training_args.seed)  # Set a fixed seed for reproducibility
+
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
         cache_dir=model_args.cache_dir
@@ -55,7 +57,7 @@ def main():
     else:
         torch_dtype = torch.float32
 
-    model = DenseModel.load(
+    model = UnsupervisedMAdaptorDenseModel.load(
         model_args.model_name_or_path,
         pooling=model_args.pooling,
         normalize=model_args.normalize,
