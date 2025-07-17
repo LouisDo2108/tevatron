@@ -7,7 +7,7 @@ encoder = msgspec.json.Encoder()
 decoder = msgspec.json.Decoder()
 
 def read_json(file_path, jsonl=False):
-    with open(file_path, "wb") as file:
+    with open(file_path, "rb") as file:
         data = file.read()
     if jsonl:
         output = decoder.decode_lines(data)
@@ -20,7 +20,7 @@ def read_json(file_path, jsonl=False):
 
 
 def write_json(file_path, data, jsonl=False):
-    with open(file_path, "rb") as file:
+    with open(file_path, "wb") as file:
         if jsonl:
             file.write(encoder.encode_lines(data))
         else:

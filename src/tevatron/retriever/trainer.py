@@ -5,6 +5,7 @@ from typing import Optional
 import torch
 import torch.distributed as dist
 from transformers.trainer import TRAINING_ARGS_NAME, Trainer
+import wandb
 
 from .modeling import EncoderModel
 

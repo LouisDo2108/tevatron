@@ -92,9 +92,18 @@ def main():
     model = model.to(training_args.device)
     model.eval()
 
+    print(
+        f"Using {type(model)} from this pretrained path {model_args.model_name_or_path}."
+    )
     for (batch_ids, batch) in tqdm(encode_loader):
         lookup_indices.extend(batch_ids)
-        with torch.amp.autocast('cuda') if training_args.fp16 or training_args.bf16 else nullcontext():
+        with (
+            torch.amp.autocast(
+                "cuda", dtype=torch.float16 if training_args.fp16 else torch.bfloat16
+            )
+            if training_args.fp16 or training_args.bf16
+            else nullcontext()
+        ):
             with torch.no_grad():
                 for k, v in batch.items():
                     batch[k] = v.to(training_args.device)

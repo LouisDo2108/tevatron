@@ -5,18 +5,17 @@ import sys
 from copy import deepcopy
 from pdb import set_trace as st
 from dataclasses import asdict
-from utils import init, get_params_info, write_json
 
+from utils import init, write_json, get_params_info
 import torch
-from collator import UnsupervisedMAdaptorCollator
-from dataset import UnsupervisedMAdaptorDataset
-from madaptor import UnsupervisedMAdaptor
-from trainer import MAdaptorTrainer as Trainer
 from transformers import AutoTokenizer
-from transformers.trainer_utils import get_last_checkpoint
-from tevatron.retriever.gc_trainer import GradCacheTrainer as GCTrainer
 
-logger = logging.getLogger(__name__)
+from madaptor import NaiveTemporal as Model
+from dataset import NaiveTemporalDataset as TrainDataset
+from collator import NaiveTemporalCollator as TrainCollator
+from trainer import MAdaptorTrainer as Trainer
+
+from tevatron.retriever.gc_trainer import GradCacheTrainer as GCTrainer
 
 
 def main():
@@ -33,7 +32,11 @@ def main():
 
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token_id = tokenizer.eos_token_id
-    tokenizer.padding_side = "right"
+
+    if data_args.padding_side == "right":
+        tokenizer.padding_side = "right"
+    else:
+        tokenizer.padding_side = "left"
 
     if training_args.bf16:
         torch_dtype = torch.bfloat16
@@ -45,7 +48,7 @@ def main():
         torch_dtype = torch.float32
         print(f"Training in fp32")
 
-    model = UnsupervisedMAdaptor.build(
+    model = Model.build(
         model_args,
         training_args,
         cache_dir=model_args.cache_dir,
@@ -53,8 +56,8 @@ def main():
         attn_implementation=model_args.attn_implementation,
     )
 
-    train_dataset = UnsupervisedMAdaptorDataset(data_args)
-    collator = UnsupervisedMAdaptorCollator(data_args, tokenizer)
+    train_dataset = TrainDataset(data_args)
+    collator = TrainCollator(data_args, tokenizer)
 
     trainer_cls = GCTrainer if training_args.grad_cache else Trainer
     trainer = trainer_cls(
@@ -78,7 +81,6 @@ def main():
     #         cache_dir=model_args.cache_dir,
     #         attn_implementation=model_args.attn_implementation,
     #     )
-
     get_params_info(model)
     trainer.train(resume_from_checkpoint=(last_checkpoint is not None))
     if wandb.run is not None:

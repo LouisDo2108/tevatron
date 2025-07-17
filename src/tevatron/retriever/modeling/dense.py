@@ -6,18 +6,37 @@ from transformers import Qwen2_5OmniThinkerForConditionalGeneration
 from .encoder import EncoderModel
 
 logger = logging.getLogger(__name__)
+from pdb import set_trace as st
 
 
 class DenseModel(EncoderModel):
 
     def encode_query(self, qry):
-        query_hidden_states = self.encoder(**qry, return_dict=True)
-        query_hidden_states = query_hidden_states.last_hidden_state
-        return self._pooling(query_hidden_states, qry['attention_mask'])
+        if self.encoder.name_or_path != "jinaai/jina-embeddings-v3":
+            query_hidden_states = self.encoder(**qry, return_dict=True)
+            query_hidden_states = query_hidden_states.last_hidden_state
+            return self._pooling(query_hidden_states, qry["attention_mask"])
+        else:
+            task = 'retrieval.query'
+            task_id = self.encoder._adaptation_map[task]
+            adapter_mask = torch.full((qry['input_ids'].size(0),), task_id, dtype=torch.int32, device=qry['input_ids'].device)
+            query_hidden_states = self.encoder(
+                **qry, return_dict=True, adapter_mask=adapter_mask,
+            )
+            query_hidden_states = query_hidden_states.last_hidden_state[:, :, :768]
+            return self._pooling(query_hidden_states, qry["attention_mask"])
 
     def encode_passage(self, psg):
         # encode passage is the same as encode query
-        return self.encode_query(psg)
+        if self.encoder.name_or_path != "jinaai/jina-embeddings-v3":
+            return self.encode_query(psg)
+        else:
+            task = "retrieval.passage"
+            task_id = self.encoder._adaptation_map[task]
+            adapter_mask = torch.full((psg["input_ids"].size(0),),task_id,dtype=torch.int32,device=psg["input_ids"].device,)
+            query_hidden_states = self.encoder(**psg, return_dict=True, adapter_mask=adapter_mask,)
+            query_hidden_states = query_hidden_states.last_hidden_state[:, :, :768]
+            return self._pooling(query_hidden_states, psg["attention_mask"])
 
     def _pooling(self, last_hidden_state, attention_mask):
         if self.pooling in ['cls', 'first']:

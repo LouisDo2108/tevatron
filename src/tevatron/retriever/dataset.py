@@ -275,6 +275,7 @@ class EncodeDataset(Dataset):
                 num_shards=self.data_args.dataset_number_of_shards,
                 index=self.data_args.dataset_shard_index,
             )
+        self.query_instruction = self.data_args.query_instruction
 
     def __len__(self):
         return len(self.encode_data)
@@ -282,14 +283,21 @@ class EncodeDataset(Dataset):
     def __getitem__(self, item):
         content = self.encode_data[item]
         if self.data_args.encode_is_query:
-            content_id = content['query_id']
+            # content_id = content['query_id']
+            content_id = content.get("query_id", "")
+            if content_id == "":
+                content_id = content.get("_id", "")  # For NanoNQ
             content_text = content.get('query_text', content.get('query', ''))
+            content_text = self.query_instruction + content_text # For model that has the query instruction like bge-base-en-v1.5
             content_text = self.data_args.query_prefix + content_text
             content_image = content.get('query_image', None)
             content_video = content.get('query_video', None)
             content_audio = content.get('query_audio', None)
         else:
-            content_id = content['docid']
+            # content_id = content['docid']
+            content_id = content.get("docid", "")
+            if content_id == "":
+                content_id = content.get("_id", "") # For NanoNQ
             content_text = content.get('text', '')
             if 'title' in content:
                 content_text = content['title'] + ' ' + content_text

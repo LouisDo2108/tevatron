@@ -6,7 +6,7 @@ from contextlib import nullcontext
 
 import numpy as np
 import torch
-from madaptor import UnsupervisedMAdaptorDenseModel, SupervisedMAdaptorDenseModel
+from madaptor import UnsupervisedMAdaptor, UnsupervisedTemporalMAdaptor, SupervisedMAdaptor
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import AutoTokenizer, HfArgumentParser, set_seed
@@ -57,7 +57,7 @@ def main():
     else:
         torch_dtype = torch.float32
 
-    model = UnsupervisedMAdaptorDenseModel.load(
+    model = UnsupervisedTemporalMAdaptor.load(
         model_args.model_name_or_path,
         pooling=model_args.pooling,
         normalize=model_args.normalize,
@@ -92,7 +92,14 @@ def main():
 
     for (batch_ids, batch) in tqdm(encode_loader):
         lookup_indices.extend(batch_ids)
-        with torch.amp.autocast('cuda') if training_args.fp16 or training_args.bf16 else nullcontext():
+        # with (
+        #     torch.autocast(
+        #         "cuda", dtype=torch.float16 if training_args.fp16 else torch.bfloat16
+        #     )
+        #     if training_args.fp16 or training_args.bf16
+        #     else nullcontext()
+        # ):
+        with torch.autocast('cuda') if training_args.fp16 or training_args.bf16 else nullcontext():
             with torch.no_grad():
                 for k, v in batch.items():
                     batch[k] = v.to(training_args.device)

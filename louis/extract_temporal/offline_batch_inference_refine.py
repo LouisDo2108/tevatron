@@ -220,6 +220,7 @@ def quick_text_normalize(text):
     text = re.sub(
         r"(?<=\b)(?:[A-Za-z]\s)+(?:[A-Za-z])(?=\b)", merge_spaced_letters, text
     )
+    text = ",".join([x.strip() for x in text.split(",")]) # Normalize the delimiter
 
     return text
 

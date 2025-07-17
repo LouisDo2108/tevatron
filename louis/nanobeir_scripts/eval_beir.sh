@@ -31,11 +31,17 @@ export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
 
 cd /home/thuy0050/code/tevatron
 
-DATA_DIR=/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/tevatron
-OUTPUT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron
+DATA_ROOT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/data/third_work
+OUTPUT_DIR_ROOT=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron
 
-bash louis/tevatron_eval_beir.sh \
-    --dataset nq \
-    --tokenizer bert-base-uncased \
-    --model_name_path bert-base-uncased \
-    --embedding_dir $OUTPUT_DIR/beir/nq
+DATA_NAME=nanobeir/nq
+MODEL_NAME=ts-retriever
+BACKBONE=contriever
+EXP_NAME=jina-embeddings-v2-base-en
+OUTPUT_DIR=$OUTPUT_DIR_ROOT/$DATA_NAME/$MODEL_NAME/$BACKBONE/$EXP_NAME
+
+bash /home/thuy0050/code/tevatron/louis/nanobeir_scripts/tevatron_eval_beir.sh \
+    --dataset queries \
+    --model_name_path jinaai/jina-embeddings-v2-base-en \
+    --embedding_dir $OUTPUT_DIR \
+    --normalize

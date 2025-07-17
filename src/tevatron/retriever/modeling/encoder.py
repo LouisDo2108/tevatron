@@ -5,7 +5,8 @@ from typing import Dict, Optional
 
 import torch
 import torch.distributed as dist
-from peft import LoraConfig, PeftModel, TaskType, get_peft_model
+from peft import LoraConfig, PeftModel, TaskType, get_peft_model, cast_mixed_precision_params
+
 from torch import Tensor, nn
 from transformers import AutoModel, PreTrainedModel
 from transformers.file_utils import ModelOutput
@@ -118,7 +119,7 @@ class EncoderModel(nn.Module):
             train_args: TrainingArguments,
             **hf_kwargs,
     ):  
-        base_model = cls.TRANSFORMER_CLS.from_pretrained(model_args.model_name_or_path, **hf_kwargs)
+        base_model = cls.TRANSFORMER_CLS.from_pretrained(model_args.model_name_or_path, trust_remote_code=True, **hf_kwargs)
         if base_model.config.pad_token_id is None:
             base_model.config.pad_token_id = 0
         if model_args.lora or model_args.lora_name_or_path:
@@ -134,10 +135,22 @@ class EncoderModel(nn.Module):
                     r=model_args.lora_r,
                     lora_alpha=model_args.lora_alpha,
                     lora_dropout=model_args.lora_dropout,
-                    target_modules=model_args.lora_target_modules.split(','),
-                    inference_mode=False
+                    target_modules=(
+                        "all-linear"
+                        if model_args.lora_target_modules == "all-linear"
+                        else model_args.lora_target_modules.split(",")
+                    ),
+                    inference_mode=False,
+                    use_rslora=False,
                 )
                 lora_model = get_peft_model(base_model, lora_config)
+
+            cast_mixed_precision_params(
+                lora_model, dtype=torch.float16 if train_args.fp16 else torch.bfloat16 if train_args.bf16 else torch.float32
+            )
+
+            print(lora_model.get_layer_status())
+            print(lora_model.get_model_status())
             model = cls(
                 encoder=lora_model,
                 pooling=model_args.pooling,
@@ -160,12 +173,17 @@ class EncoderModel(nn.Module):
              normalize: bool = False,
              lora_name_or_path: str = None,
              **hf_kwargs):
-        base_model = cls.TRANSFORMER_CLS.from_pretrained(model_name_or_path, **hf_kwargs)
+        base_model = cls.TRANSFORMER_CLS.from_pretrained(model_name_or_path, weights_only=False, trust_remote_code=True, **hf_kwargs)
         if base_model.config.pad_token_id is None:
             base_model.config.pad_token_id = 0
         if lora_name_or_path:
             lora_config = LoraConfig.from_pretrained(lora_name_or_path, **hf_kwargs)
-            lora_model = PeftModel.from_pretrained(base_model, lora_name_or_path, config=lora_config)
+            lora_model = PeftModel.from_pretrained(
+                base_model,
+                lora_name_or_path,
+                config=lora_config,
+                autocast_adapter_dtype=False,
+            )
             lora_model = lora_model.merge_and_unload()
             model = cls(
                 encoder=lora_model,

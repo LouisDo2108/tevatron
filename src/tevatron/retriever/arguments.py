@@ -1,8 +1,7 @@
-import os
 from dataclasses import dataclass, field
 from typing import Optional
 
-from transformers import TrainingArguments
+from transformers.training_args import TrainingArguments
 
 
 @dataclass
@@ -206,6 +205,9 @@ class DataArguments:
         default='right',
         metadata={"help": "padding side for the tokenizer, can be 'left' or 'right'"}
     )
+    query_instruction: str = field(
+        default="",
+    )
 
 
 @dataclass
@@ -216,3 +218,10 @@ class TevatronTrainingArguments(TrainingArguments):
     grad_cache: bool = field(default=False, metadata={"help": "Use gradient cache update"})
     gc_q_chunk_size: int = field(default=4)
     gc_p_chunk_size: int = field(default=32)
+    dataloader_num_workers: int = field(default=4)
+    tf32: bool = field(default=True)
+    report_to: str = field(default="wandb")
+    save_total_limit: int = field(default=1)
+    max_length: int = field(default=512)
+    seed: int = field(default=42)
+    data_seed: int = field(default=42)

@@ -1,70 +1,33 @@
+import wandb
 import logging
 import os
 import sys
 from copy import deepcopy
 from pdb import set_trace as st
+from dataclasses import asdict
 
 import torch
 from madaptor import (
-    SupervisedMAdaptorDenseModel,
-    NaiveMAdaptorDenseModel,
-    NaiveSupervisedMAdaptorDenseModel,
+    SupervisedMAdaptor,
+    NaiveMAdaptor,
+    NaiveSupervisedMAdaptor,
 )
+from dataset import SupervisedMAdaptorDataset as TrainDataset
+from collator import SupervisedMAdaptorCollator as TrainCollator
+from utils import init, get_params_info, write_json
 from trainer import MAdaptorTrainer as Trainer
 from transformers import AutoTokenizer, HfArgumentParser, set_seed
-from transformers.trainer_callback import EarlyStoppingCallback
 from transformers.trainer_utils import get_last_checkpoint
 
-from tevatron.retriever.dataset import TrainDataset
-from tevatron.retriever.collator import TrainCollator
+# from tevatron.retriever.dataset import TrainDataset
+# from tevatron.retriever.collator import TrainCollator
 from tevatron.retriever.arguments import DataArguments, ModelArguments
 from tevatron.retriever.arguments import TevatronTrainingArguments as TrainingArguments
 from tevatron.retriever.gc_trainer import GradCacheTrainer as GCTrainer
 
-logger = logging.getLogger(__name__)
-
 
 def main():
-    parser = HfArgumentParser((ModelArguments, DataArguments, TrainingArguments))
-
-    if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
-        model_args, data_args, training_args = parser.parse_json_file(
-            json_file=os.path.abspath(sys.argv[1])
-        )
-    else:
-        model_args, data_args, training_args = parser.parse_args_into_dataclasses()
-        model_args: ModelArguments
-        data_args: DataArguments
-        training_args: TrainingArguments
-
-    if (
-        os.path.exists(training_args.output_dir)
-        and os.listdir(training_args.output_dir)
-        and training_args.do_train
-        and not training_args.overwrite_output_dir
-    ):
-        raise ValueError(
-            f"Output directory ({training_args.output_dir}) already exists and is not empty. Use --overwrite_output_dir to overcome."
-        )
-
-    # Setup logging
-    logging.basicConfig(
-        format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
-        datefmt="%m/%d/%Y %H:%M:%S",
-        level=logging.INFO if training_args.local_rank in [-1, 0] else logging.WARN,
-    )
-    logger.warning(
-        "Process rank: %s, device: %s, n_gpu: %s, distributed training: %s, 16-bits training: %s",
-        training_args.local_rank,
-        training_args.device,
-        training_args.n_gpu,
-        bool(training_args.local_rank != -1),
-        training_args.fp16,
-    )
-    logger.info("Training/evaluation parameters %s", training_args)
-    logger.info("MODEL parameters %s", model_args)
-
-    set_seed(training_args.seed)
+    model_args, data_args, training_args = init()
 
     tokenizer = AutoTokenizer.from_pretrained(
         (
@@ -89,7 +52,7 @@ def main():
         torch_dtype = torch.float32
         print(f"Training in fp32")
 
-    model = NaiveSupervisedMAdaptorDenseModel.build(
+    model = SupervisedMAdaptor.build(
         model_args,
         training_args,
         cache_dir=model_args.cache_dir,
@@ -123,7 +86,19 @@ def main():
     #         attn_implementation=model_args.attn_implementation,
     #     )
 
+    get_params_info(model)
     trainer.train(resume_from_checkpoint=(last_checkpoint is not None))
+    if wandb.run is not None:
+        wandb.run.config.update(asdict(model_args), allow_val_change=True)
+        wandb.run.config.update(asdict(data_args), allow_val_change=True)
+
+    training_args_to_save = asdict(deepcopy(training_args))
+    training_args_to_save.update(asdict(model_args))
+    training_args_to_save.update(asdict(data_args))
+    write_json(
+        os.path.join(training_args.output_dir, "full_config.json"),
+        training_args_to_save,
+    )
     trainer.save_model()
     if trainer.is_world_process_zero():
         tokenizer.save_pretrained(training_args.output_dir)

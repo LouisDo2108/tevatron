@@ -8,9 +8,9 @@ from dataclasses import asdict
 from utils import init, get_params_info, write_json
 
 import torch
-from collator import UnsupervisedMAdaptorCollator
-from dataset import UnsupervisedMAdaptorDataset
-from madaptor import UnsupervisedMAdaptor
+from collator import UnsupervisedTemporalMAdaptorCollator
+from dataset import UnsupervisedTemporalMAdaptorDataset
+from madaptor import UnsupervisedTemporalMAdaptor
 from trainer import MAdaptorTrainer as Trainer
 from transformers import AutoTokenizer
 from transformers.trainer_utils import get_last_checkpoint
@@ -45,7 +45,7 @@ def main():
         torch_dtype = torch.float32
         print(f"Training in fp32")
 
-    model = UnsupervisedMAdaptor.build(
+    model = UnsupervisedTemporalMAdaptor.build(
         model_args,
         training_args,
         cache_dir=model_args.cache_dir,
@@ -53,8 +53,11 @@ def main():
         attn_implementation=model_args.attn_implementation,
     )
 
-    train_dataset = UnsupervisedMAdaptorDataset(data_args)
-    collator = UnsupervisedMAdaptorCollator(data_args, tokenizer)
+    # train_dataset = UnsupervisedMAdaptorDataset(data_args)
+    # collator = UnsupervisedMAdaptorCollator(data_args, tokenizer)
+
+    train_dataset = UnsupervisedTemporalMAdaptorDataset(data_args)
+    collator = UnsupervisedTemporalMAdaptorCollator(data_args, tokenizer)
 
     trainer_cls = GCTrainer if training_args.grad_cache else Trainer
     trainer = trainer_cls(

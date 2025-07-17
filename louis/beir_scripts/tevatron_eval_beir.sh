@@ -44,7 +44,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Check if required arguments are provided
-if [ -z "$dataset" ] || [ -z "$tokenizer" ] || [ -z "$model_name_path" ] || [ -z "$embedding_dir" ]; then
+if [ -z "$dataset" ] || [ -z "$model_name_path" ] || [ -z "$embedding_dir" ]; then
   echo "Missing required arguments. Please provide all necessary options."
   echo "Usage: $0 --dataset <dataset> --tokenizer <tokenizer> --model_name_path <model> --embedding_dir <directory> --query_prefix <prefix> --passage_prefix <prefix> [--lora_name_path <path>] [--normalize]"
   exit 1
@@ -64,13 +64,12 @@ fi
 #   CUDA_VISIBLE_DEVICES=0 python -m tevatron.retriever.driver.encode \
 #     --output_dir=temp \
 #     --model_name_or_path ${model_name_path} \
-#     --tokenizer_name ${tokenizer} \
 #     --fp16 \
 #     ${lora_args} \
 #     ${normalize_flag} \
 #     --pooling eos \
 #     --passage_prefix "${passage_prefix}" \
-#     --per_device_eval_batch_size 64 \
+#     --per_device_eval_batch_size 512 \
 #     --passage_max_len 512 \
 #     --dataset_name Tevatron/beir-corpus \
 #     --dataset_config ${dataset} \
@@ -84,7 +83,6 @@ fi
 # CUDA_VISIBLE_DEVICES=0 python -m tevatron.retriever.driver.encode \
 #   --output_dir=temp \
 #   --model_name_or_path ${model_name_path} \
-#   --tokenizer_name ${tokenizer} \
 #   --fp16 \
 #   ${lora_args} \
 #   ${normalize_flag} \
@@ -114,5 +112,8 @@ fi
 #     --output $embedding_dir/rank.${dataset}.trec \
 #     --remove_query
 
-# # Evaluate results using pyserini
-# python -m pyserini.eval.trec_eval -c -mrecall.100 -mndcg_cut.10 beir-v1.0.0-${dataset}-test $embedding_dir/rank.${dataset}.trec
+# Evaluate results using pyserini
+python -m pyserini.eval.trec_eval -c \
+  -mrecall.100 -mndcg_cut.10 -mP.10 -mrecall.10 -mrecip_rank -mmap \
+  beir-v1.0.0-${dataset}-test \
+  $embedding_dir/rank.${dataset}.trec
