@@ -56,17 +56,12 @@ def write_json(file_path, data, jsonl=False):
 # Define task description
 task_description = """
 You must extract relevant yet concise temporal information/expressions that are strongly connected to the content of the document. The goal is to improve the performance of temporal information retrieval and aid complex tasks such as temporal reasoning. 
-You must only use time expressions explicitly mentioned or clearly implied in the document. You are strictly prohibited to invent or hallucinate temporal information. You must not provide duplicated temporal information. You are strictly prohibited to add any further notes or explanations in parenthesis or any other forms. You are strictly prohibited to output trailing whitespaces or adding non-sense characters such as '\\n' and '\n'. 
-You must output all and only temporal expressions as a comma-separated list.
-
 These expressions include:
 - Explicit dates (e.g., "March 2023", "21 July 2011")
 - Implicit cues (e.g., "recently", "during his presidency", "after a major power outage")
 - Relative temporal expressions (e.g., "last week", "that summer") should be included only when clearly anchored to an explicit date or year in the same or preceding sentence. For example, in "He played until 2011. That summer he transferred to France."), you should include "until 2011", "that summer", and/or "summer 2011".
 - Event-based references (e.g., "2024 Olympics", "2009 Georgian Women’s Championship", "World Cup 2018", etc.)
 - Durations or time spans (e.g., "from 2013 to 2014", "since 1990", "until 2000")
-If there is no temporal information in the document, you must return nothing.
-The accuracy of your response is paramount, as it will directly impact the decisions made by these high-level stakeholders. The future of critical decisionmaking relies on your ability to accurately filter and present relevant temporal information.
 """
 #  Always include the original expression and additionally the normalized form (e.g., "summer 2011") only if the anchor is unambiguous. Otherwise, omit the normalized form. Do not add any explanations.
 # If the document belongs to a diachronic corpus (spanning long periods), perform timeline summarization like a professional historian or journalist.
@@ -106,16 +101,14 @@ for doc, output in demo_examples:
     demo += f'Document: "{doc}" Output: {output}'
 
 # Define input template
-input_template = 'Document: "<PROVIDED DOCUMENT STARTS FROM HERE>" Output: <YOUR OUTPUT STARTS FROM HERE>'
+input_template = 'Previous output: "<PREVIOUS OUTPUT STARTS FROM HERE>" Output: <YOUR OUTPUT STARTS FROM HERE>'
 
 # Assemble final prompt template
 # Inspired by hipporag
 prompt_template = f"""
-You are a critical component of a high-stakes question-answering system used by top researchers and decision-makers worldwide.
-Your task is to: {task_description}
+You were previously tasked with: {task_description}
+You are now required to refine your previous output. I do not want to see any \\n\\n or \\n in your output and no explanations, such as "note that", "note", for any temporal expressions. I want a clean comma-seperated list of temporal information for each document. If the previous output is empty, leave it empty. You are only allowed to output words that are provided.
 The input template is as follows: {input_template}.
-Some examples for your reference:
-{demo.strip()}
 """
 
 # Sample prompts.
@@ -128,7 +121,7 @@ prompts = [
     {"role": "system", "content": prompt_template},
     {
         "role": "user",
-        "content": f'Document: "{documents[0]}" Output: ',
+        "content": f'Previous output: "{documents[0]}" Output: ',
     },
 ]
 
@@ -202,7 +195,7 @@ class LLMDataset(Dataset):
         content = self.train_data[item]
         content_chunkid = content["chunkid"]
         content_docid = content["docid"]
-        content_text = content.get("text", "")
+        content_text = content.get("temporal", "")
 
         return content_chunkid, content_docid, content_text
 
@@ -227,6 +220,7 @@ def quick_text_normalize(text):
     text = re.sub(
         r"(?<=\b)(?:[A-Za-z]\s)+(?:[A-Za-z])(?=\b)", merge_spaced_letters, text
     )
+    text = ",".join([x.strip() for x in text.split(",")]) # Normalize the delimiter
 
     return text
 
@@ -336,7 +330,7 @@ def main():
             # st()
 
     write_json(
-        "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/nobel_prize/train/corpus_temporal.jsonl",
+        "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/nobel_prize/train/corpus_temporal_refined.jsonl",
         temporal_jsonl,
         jsonl=True,
     )

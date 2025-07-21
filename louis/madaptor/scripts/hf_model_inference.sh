@@ -35,12 +35,12 @@ DATA_ROOT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/data/third_work
 OUTPUT_DIR_ROOT=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron
 
 DATA_NAME=temporal_nobel_prize
-MODEL_NAME=bge-base-en-v1.5
-BACKBONE=bge-base-en-v1.5
-EXP_NAME=bge-base-en-v1.5
+MODEL_NAME=contriever # bge-base-en-v1.5
+BACKBONE=contriever
+EXP_NAME=contriever
 OUTPUT_DIR=$OUTPUT_DIR_ROOT/$DATA_NAME/$MODEL_NAME/$BACKBONE/$EXP_NAME
 
-CHECKPOINT_DIR=BAAI/bge-base-en-v1.5
+CHECKPOINT_DIR=facebook/contriever
 
 export WANDB_ENTITY=htluc19
 export WANDB_PROJECT=temporal
@@ -54,8 +54,8 @@ mkdir -p $OUTPUT_DIR # Create folder if not exists
 python src/tevatron/retriever/driver/encode.py \
   --per_device_eval_batch_size 512 \
   --passage_max_len 512 \
-  --pooling cls \
-  --fp16 \
+  --pooling avg \
+  --bf16 \
   --normalize \
   --attn_implementation sdpa \
   --dataset_name LouisDo2108/temporal-nobel-prize \
@@ -65,15 +65,15 @@ python src/tevatron/retriever/driver/encode.py \
   --overwrite_output_dir
 
 # ==== ENCODE QUERIES ==== 
+# --query_instruction "Represent this sentence for searching relevant passages: " \
 python src/tevatron/retriever/driver/encode.py \
   --per_device_eval_batch_size 512 \
   --query_max_len 512 \
-  --pooling cls \
-  --fp16 \
+  --pooling avg \
+  --bf16 \
   --normalize \
   --attn_implementation sdpa \
   --encode_is_query \
-  --query_instruction "Represent this sentence for searching relevant passages: " \
   --dataset_name LouisDo2108/temporal-nobel-prize \
   --dataset_config query \
   --model_name_or_path $CHECKPOINT_DIR \

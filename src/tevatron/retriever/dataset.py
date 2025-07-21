@@ -288,6 +288,8 @@ class EncodeDataset(Dataset):
             if content_id == "":
                 content_id = content.get("_id", "")  # For NanoNQ
             content_text = content.get('query_text', content.get('query', ''))
+            if content_text == '':
+                content_text = content.get("text", "")  # For NanoNQ
             content_text = self.query_instruction + content_text # For model that has the query instruction like bge-base-en-v1.5
             content_text = self.data_args.query_prefix + content_text
             content_image = content.get('query_image', None)

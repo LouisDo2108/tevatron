@@ -55,7 +55,7 @@ mkdir -p $OUTPUT_DIR # Create folder if not exists
 python src/tevatron/retriever/driver/train.py \
   --do_train \
   --pooling avg \
-  --fp16 \
+  --bf16 \
   --normalize \
   --train_group_size 2 \
   --query_max_len 512 \
@@ -78,7 +78,7 @@ python src/tevatron/retriever/driver/encode.py \
   --per_device_eval_batch_size 512 \
   --passage_max_len 512 \
   --pooling avg \
-  --fp16 \
+  --bf16 \
   --normalize \
   --dataset_name LouisDo2108/temporal-nobel-prize \
   --dataset_config corpus \
@@ -91,7 +91,7 @@ python src/tevatron/retriever/driver/encode.py \
   --per_device_eval_batch_size 512 \
   --query_max_len 512 \
   --pooling avg \
-  --fp16 \
+  --bf16 \
   --normalize \
   --encode_is_query \
   --dataset_name LouisDo2108/temporal-nobel-prize \

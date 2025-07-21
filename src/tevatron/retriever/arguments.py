@@ -3,6 +3,14 @@ from typing import Optional
 
 from transformers.training_args import TrainingArguments
 
+from transformers.utils import ExplicitEnum
+
+from sentence_transformers.sampler import (
+    DefaultBatchSampler,
+    MultiDatasetDefaultBatchSampler,
+)
+from sentence_transformers.training_args import BatchSamplers, MultiDatasetBatchSamplers
+
 
 @dataclass
 class ModelArguments:
@@ -225,3 +233,9 @@ class TevatronTrainingArguments(TrainingArguments):
     max_length: int = field(default=512)
     seed: int = field(default=42)
     data_seed: int = field(default=42)
+    batch_sampler: BatchSamplers = field(
+        default=BatchSamplers.BATCH_SAMPLER,
+    )
+    multi_dataset_batch_sampler: MultiDatasetBatchSamplers = field(
+        default=MultiDatasetBatchSamplers.PROPORTIONAL,
+    )

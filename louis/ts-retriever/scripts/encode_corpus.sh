@@ -4,8 +4,8 @@
 #SBATCH --gres=gpu:A100:1
 #SBATCH --qos=fitq
 #SBATCH --job-name=thuy0050
-#SBATCH --output=/home/thuy0050/code/MixLoraDSI/logs/slurm-%x-%j.out
-#SBATCH --error=/home/thuy0050/code/MixLoraDSI/logs/slurm-%x-%j.err
+#SBATCH --output=/home/thuy0050/code/tevatron/louis/logs/slurm-%x-%j.out
+#SBATCH --error=/home/thuy0050/code/tevatron/louis/logs/slurm-%x-%j.err
 #SBATCH --time=1-00:00:00
 
 #SBATCH --nodes=1
@@ -38,7 +38,7 @@ MODEL_NAME=ts-retriever
 BACKBONE=tscontriever
 EXP_NAME=provided_checkpoint_ts-retriever
 OUTPUT_DIR=$OUTPUT_DIR_ROOT/$DATA_NAME/$MODEL_NAME/$BACKBONE/$EXP_NAME
-CHECKPOINT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron/temporal_nobel_prize/ts-retriever/tscontriever/original-ts-retriever/models/Tscontriever
+CHECKPOINT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron/temporal_nobel_prize/ts-retriever/contriever/original-ts-retriever/models/Tscontriever
 
 # /home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron/temporal_temporal_nobel_prize/ts-retriever/reproduced_with_provided_checkpoint_ts-retriever
 
@@ -47,7 +47,6 @@ mkdir -p $OUTPUT_DIR
 # Scaled Dot Product Attention, for BERT
 # ==== ENCODE CORPUS ====
 python src/tevatron/retriever/driver/encode.py \
-  --fp16 \
   --tf32 \
   --per_device_eval_batch_size 512 \
   --passage_max_len 512 \
@@ -64,7 +63,6 @@ python src/tevatron/retriever/driver/encode.py \
 python src/tevatron/retriever/driver/encode.py \
   --per_device_eval_batch_size 512 \
   --query_max_len 512 \
-  --fp16 \
   --tf32 \
   --pooling avg \
   --normalize \

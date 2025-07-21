@@ -62,7 +62,7 @@ fi
 # Encode passages
 CUDA_VISIBLE_DEVICES=0 python -m tevatron.retriever.driver.encode \
   --model_name_or_path ${model_name_path} \
-  --fp16 \
+  --bf16 \
   ${lora_args} \
   ${normalize_flag} \
   --pooling avg \
@@ -71,6 +71,7 @@ CUDA_VISIBLE_DEVICES=0 python -m tevatron.retriever.driver.encode \
   --passage_max_len 512 \
   --dataset_name zeta-alpha-ai/NanoNQ \
   --dataset_config corpus \
+  --dataset_split train \
   --encode_output_path $embedding_dir/corpus.pkl \
   --attn_implementation sdpa \
   --overwrite_output_dir
@@ -78,7 +79,7 @@ CUDA_VISIBLE_DEVICES=0 python -m tevatron.retriever.driver.encode \
 # Encode queries
 CUDA_VISIBLE_DEVICES=0 python -m tevatron.retriever.driver.encode \
   --model_name_or_path ${model_name_path} \
-  --fp16 \
+  --bf16 \
   ${lora_args} \
   ${normalize_flag} \
   --pooling avg \

@@ -23,6 +23,7 @@ conda activate tevatron
 
 export CUDA_VISIBLE_DEVICES=0
 export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+export VLLM_USE_V1=0
 # export TQDM_DISABLE=1 # Avoid logging tqdm progress bars
 # export TORCH_USE_CUDA_DSA=0 # Set to 1 only if debugging
 # export CUDA_LAUNCH_BLOCKING=0 # Set to 1 only if debugging
@@ -31,13 +32,29 @@ export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
 
 cd /home/thuy0050/code/tevatron
 
+
+### Scripts for the corpus
+# DATA_ROOT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/data/third_work
+# OUTPUT_DIR_ROOT=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron
+
+# python louis/extract_temporal/offline_batch_inference_refine.py \
+#     --model_name_or_path bert-base-uncased \
+#     --dataset_name $DATA_ROOT_DIR/tevatron/Tevatron___wikipedia-nq-corpus  \
+#     --dataset_path $DATA_ROOT_DIR/temporal/nobel_prize/train/corpus_temporal.jsonl \
+#     --query_max_len 512 \
+#     --passage_max_len 512 \
+#     --per_device_train_batch_size 64
+
+
+# Scripts for the training data
 DATA_ROOT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/data/third_work
 OUTPUT_DIR_ROOT=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron
 
-python louis/extract_temporal/offline_batch_inference_refine.py \
+python louis/extract_temporal/offline_batch_inference_for_train_temporal.py \
     --model_name_or_path bert-base-uncased \
-    --dataset_name $DATA_ROOT_DIR/tevatron/Tevatron___wikipedia-nq-corpus  \
-    --dataset_path $DATA_ROOT_DIR/temporal/nobel_prize/train/corpus_temporal.jsonl \
-    --query_max_len 256 \
-    --passage_max_len 256 \
-    --per_device_train_batch_size 64
+    --dataset_name $DATA_ROOT_DIR/tevatron/Tevatron___msmarco-passage \
+    --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/train.jsonl \
+    --query_max_len 512 \
+    --passage_max_len 512 \
+    --per_device_train_batch_size 128 \
+    --dataloader_num_workers 4

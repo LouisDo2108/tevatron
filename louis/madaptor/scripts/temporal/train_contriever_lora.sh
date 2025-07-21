@@ -37,7 +37,7 @@ OUTPUT_DIR_ROOT=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron
 DATA_NAME=temporal_nobel_prize
 MODEL_NAME=ts-retriever
 BACKBONE=contriever
-EXP_NAME=naive_temporal_5epoch_temp0.05_lora2
+EXP_NAME=naive_temporal_10epoch_temp0.05_lora_bf16
 OUTPUT_DIR=$OUTPUT_DIR_ROOT/$DATA_NAME/$MODEL_NAME/$BACKBONE/$EXP_NAME
 
 CHECKPOINT_DIR=facebook/contriever
@@ -54,7 +54,7 @@ mkdir -p $OUTPUT_DIR # Create folder if not exists
 python /home/thuy0050/code/tevatron/louis/madaptor/train_tsretriever_with_temporal.py \
   --do_train \
   --pooling avg \
-  --fp16 \
+  --bf16 \
   --train_group_size 2 \
   --query_max_len 512 \
   --passage_max_len 512 \
@@ -62,7 +62,7 @@ python /home/thuy0050/code/tevatron/louis/madaptor/train_tsretriever_with_tempor
   --learning_rate 1e-4 \
   --temperature 0.05 \
   --logging_steps 100 \
-  --num_train_epochs 5 \
+  --num_train_epochs 10 \
   --attn_implementation sdpa \
   --lora \
   --lora_r 4 \
@@ -87,7 +87,7 @@ python src/tevatron/retriever/driver/encode.py \
   --per_device_eval_batch_size 512 \
   --passage_max_len 512 \
   --pooling avg \
-  --fp16 \
+  --bf16 \
   --normalize \
   --attn_implementation sdpa \
   --dataset_name LouisDo2108/temporal-nobel-prize \
@@ -103,7 +103,7 @@ python src/tevatron/retriever/driver/encode.py \
   --per_device_eval_batch_size 512 \
   --query_max_len 512 \
   --pooling avg \
-  --fp16 \
+  --bf16 \
   --normalize \
   --attn_implementation sdpa \
   --encode_is_query \

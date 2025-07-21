@@ -597,6 +597,8 @@ class NaiveTemporalv2(DenseModel):
     def __init__(self, *args, **kwargs):
         super(NaiveTemporalv2, self).__init__(*args, **kwargs)
 
+        # self.matryoshka_dim_list = [512]
+        # self.truncated_dim = 512
         self.matryoshka_dim_list = sorted([512, 768], reverse=True)
         self.truncated_dim = self.matryoshka_dim_list[1]  # Default to the second largest dimension
 
@@ -612,6 +614,9 @@ class NaiveTemporalv2(DenseModel):
         # original_shape_scores = None
 
         target = None
+        row_idx = None
+        no_filter_mask = None
+        num_neg = p_reps.size(0) // q_reps.size(0)
 
         for m in self.matryoshka_dim_list:
             q_reps_trunc = q_reps[:, :m]
@@ -621,22 +626,32 @@ class NaiveTemporalv2(DenseModel):
 
             scores_semantic = scores_semantic.view(q_reps.size(0), -1)
 
-            # if m == q_reps.shape[-1]:
-            #     original_shape_scores = scores_semantic.diag().clone().detach()
-
-            # if original_shape_scores is not None and m < q_reps.shape[-1]:
-            #     # Regularization with MSE loss
-            #     mse_loss = F.mse_loss(scores_semantic.diag(), original_shape_scores)
-            #     total_loss += mse_loss
-            #     partial_losses[f"loss_mse"] = mse_loss.clone().detach()
-
             if target is None:
                 target = torch.arange(
                     scores_semantic.size(0),
                     device=scores_semantic.device,
                     dtype=torch.long,
                 )
-                target = target * (p_reps.size(0) // q_reps.size(0))
+                target = target * num_neg
+                no_filter_mask = torch.stack(
+                    [
+                        torch.arange(
+                            x,
+                            x + num_neg,
+                            device=scores_semantic.device,
+                            dtype=torch.long,
+                        )
+                        for x in target
+                    ]
+                ) # A mask to filter out the positive and annotated negatives
+                row_idx = torch.arange(
+                    scores_semantic.size(0), device=scores_semantic.device
+                )
+
+            # Filter 95% threshold false positives
+            # scores_semantic = self.mask_inbatch_negative_percentile(
+            #     target, row_idx, no_filter_mask, scores_semantic,   percentile=0.95
+            # )
 
             loss_semantic = self.cross_entropy(scores_semantic / self.temperature, target)
 
@@ -648,6 +663,15 @@ class NaiveTemporalv2(DenseModel):
 
                 scores_temporal = self.compute_similarity(
                     q_reps_temporal_trunc, p_temporal_reps_trunc
+                )
+
+                # Filter 95% threshold false positives
+                scores_temporal = self.mask_inbatch_negative_percentile(
+                    torch.arange(len(scores_temporal)),
+                    torch.arange(len(scores_temporal)),
+                    no_filter_mask,
+                    scores_temporal,
+                    percentile=0.95,
                 )
 
                 loss_temporal = self.cross_entropy(
@@ -662,6 +686,16 @@ class NaiveTemporalv2(DenseModel):
             partial_losses[f"loss_semantic_{m}"] = loss_semantic.clone().detach()
 
         return total_loss, partial_losses
+
+    def mask_inbatch_negative_percentile(self, target, row_idx, no_filter_mask, scores_semantic, percentile=0.95):
+        semantic_thresholds = scores_semantic[row_idx, target] * percentile  # shape: [B]
+
+        mask = scores_semantic > semantic_thresholds.unsqueeze(1)  # Mask out those greater than the threshold
+        mask[row_idx.unsqueeze(1), no_filter_mask] = False  # type: ignore # don't mask the positive and annotated negatives, only consider the other in-batch negatives
+
+        # Apply the mask
+        scores_semantic = scores_semantic.masked_fill(mask, float('-inf'))
+        return scores_semantic
 
     def encode_passage(self, psg, temporal_span_list=None):
         # encode passage is the same as encode query
@@ -729,6 +763,270 @@ class NaiveTemporalv2(DenseModel):
             losses.update(loss_partial)
 
             return losses   
+        else:
+            # Copy from EncoderModel's forward
+            q_reps = self.encode_query(query) if query else None
+            p_reps = self.encode_passage(passage) if passage else None
+
+            # for inference
+            if q_reps is None or p_reps is None:
+                return EncoderOutput(q_reps=q_reps, p_reps=p_reps)
+
+            # for eval
+            scores = self.compute_similarity(q_reps, p_reps)
+            loss = None
+
+            return EncoderOutput(
+                loss=loss,
+                scores=scores,
+                q_reps=q_reps,
+                p_reps=p_reps,
+            )
+
+
+class NaiveTemporalv3(DenseModel):
+
+    def __init__(self, *args, **kwargs):
+        super(NaiveTemporalv3, self).__init__(*args, **kwargs)
+
+        # self.matryoshka_dim_list = [512]
+        # self.truncated_dim = 512
+        self.matryoshka_dim_list = sorted([512, 768], reverse=True)
+        self.truncated_dim = self.matryoshka_dim_list[
+            1
+        ]  # Default to the second largest dimension
+        self.temporal_projector = nn.Sequential(
+            nn.Linear(768, 256, bias=False),
+            nn.GELU(),
+            nn.Linear(256, 256, bias=False),
+        )  # Project the temporal part to a smaller dimension
+
+    def compute_loss(
+        self,
+        q_reps,
+        p_reps,
+        p_temporal_reps,
+    ):
+        total_loss = 0.0
+        partial_losses = {}
+
+        # original_shape_scores = None
+
+        target = None
+        row_idx = None
+        no_filter_mask = None
+        num_neg = p_reps.size(0) // q_reps.size(0)
+
+        for m in self.matryoshka_dim_list:
+            q_reps_trunc = q_reps[:, :m]
+            p_reps_trunc = p_reps[:, :m]
+
+            scores_semantic = self.compute_similarity(q_reps_trunc, p_reps_trunc)
+
+            scores_semantic = scores_semantic.view(q_reps.size(0), -1)
+
+            if target is None:
+                target = torch.arange(
+                    scores_semantic.size(0),
+                    device=scores_semantic.device,
+                    dtype=torch.long,
+                )
+                target = target * num_neg
+                no_filter_mask = torch.stack(
+                    [
+                        torch.arange(
+                            x,
+                            x + num_neg,
+                            device=scores_semantic.device,
+                            dtype=torch.long,
+                        )
+                        for x in target
+                    ]
+                )  # A mask to filter out the positive and annotated negatives
+                row_idx = torch.arange(
+                    scores_semantic.size(0), device=scores_semantic.device
+                )
+
+            # # Compute 95% threshold
+            # scores_semantic = self.mask_inbatch_negative_percentile(
+            #     target, row_idx, no_filter_mask, scores_semantic,   percentile=0.95
+            # )
+
+            # if m == q_reps.shape[-1]:
+            #     original_shape_scores = scores_semantic[row_idx.unsqueeze(1), no_filter_mask]
+
+            # if original_shape_scores is not None and m < q_reps.shape[-1]:
+            #     # Regularization with MSE loss
+            #     ###### Improvement: instead of using mseloss, peform KL loss between the original shape scores and the current scores_semantic!!!!
+            #     mse_loss = F.mse_loss(
+            #         scores_semantic[row_idx.unsqueeze(1), no_filter_mask], original_shape_scores
+            #     )
+            #     total_loss += mse_loss
+            #     partial_losses[f"loss_mse"] = mse_loss.clone().detach()
+
+            # scores_temporal = self.mask_inbatch_negative_percentile(
+            #     torch.arange(len(scores_temporal)),
+            #     torch.arange(len(scores_temporal)),
+            #     no_filter_mask,
+            #     scores_temporal,
+            #     percentile=0.95,
+            # )
+
+            loss_semantic = self.cross_entropy(
+                scores_semantic / self.temperature, target
+            )
+
+            if p_temporal_reps is not None and m != q_reps.shape[-1]:
+                # Train the right-left part of embedding to explicitly represent temporal
+                t = q_reps.shape[-1] - m
+
+                q_reps_trunc = q_reps[:, -t:]
+                # p_reps_trunc = p_reps[:, -t:]
+                p_temporal_reps_projected = self.temporal_projector(p_temporal_reps)
+
+                scores_temporal_query = self.compute_similarity(
+                    q_reps_trunc, p_temporal_reps_projected
+                )
+
+                # scores_temporal_passage = self.compute_similarity(
+                #     p_reps_trunc,
+                #     p_temporal_reps_projected
+                # )
+
+                # scores_temporal_projected = self.compute_similarity(
+                #     p_temporal_reps_projected, p_temporal_reps_projected
+                # )
+
+                # p_target = torch.arange(
+                #     len(p_reps_trunc),
+                #     device=p_reps_trunc.device,
+                #     dtype=torch.long,
+                # )
+
+                loss_temporal_query = self.cross_entropy(
+                    scores_temporal_query / self.temperature, target
+                )
+
+                # loss_temporal_passage = self.cross_entropy(
+                #     scores_temporal_passage / self.temperature, p_target
+                # )
+
+                # scores_temporal = self.compute_similarity(
+                #     F.normalize(p_temporal_reps, dim=-1),
+                #     F.normalize(p_temporal_reps, dim=-1)
+                # )
+                # temporal_thresholds = scores_temporal.diag() * 0.95
+                # mask = scores_temporal >= temporal_thresholds.unsqueeze(1)
+                # mask.fill_diagonal_(False)  # Don't mask the diagonal (self-similarity)
+
+                # scores_temporal_projected = scores_temporal_projected.masked_fill(mask, float("-inf"))
+
+                # loss_temporal_projected = self.cross_entropy(
+                #     scores_temporal_projected / self.temperature, p_target
+                # )
+
+                loss_temporal = loss_temporal_query  # + loss_temporal_passage # + loss_temporal_projected
+
+                total_loss += loss_temporal
+                partial_losses[f"loss_temporal_{m}"] = loss_temporal.clone().detach()
+
+            total_loss += loss_semantic
+            partial_losses[f"loss_semantic_{m}"] = loss_semantic.clone().detach()
+
+        return total_loss, partial_losses
+
+    def mask_inbatch_negative_percentile(
+        self, target, row_idx, no_filter_mask, scores_semantic, percentile=0.95
+    ):
+        semantic_thresholds = (
+            scores_semantic[row_idx, target] * percentile
+        )  # shape: [B]
+
+        mask = scores_semantic > semantic_thresholds.unsqueeze(
+            1
+        )  # Mask out those greater than the threshold
+        mask[row_idx.unsqueeze(1), no_filter_mask] = False  # type: ignore # don't mask the positive and annotated negatives, only consider the other in-batch negatives
+
+        # Apply the mask
+        scores_semantic = scores_semantic.masked_fill(mask, float("-inf"))
+        return scores_semantic
+
+    def encode_passage(self, psg, temporal_span_list=None):
+        # encode passage is the same as encode query
+        if self.encoder.name_or_path != "jinaai/jina-embeddings-v3":
+
+            if self.training and temporal_span_list is not None:
+                query_hidden_states = self.encoder(**psg, return_dict=True)
+                query_hidden_states = query_hidden_states.last_hidden_state
+                pooled_hidden_states = self._pooling(
+                    query_hidden_states, psg["attention_mask"]
+                )
+
+                # Processing temporal spans
+                temporal_hidden_states = []
+
+                for temporal_span_sublist, hidden_state in zip(
+                    temporal_span_list, query_hidden_states
+                ):
+                    temp = []
+                    for start_token_index, end_token_index in temporal_span_sublist:
+                        temp.append(
+                            hidden_state[start_token_index : end_token_index + 1].mean(
+                                dim=0
+                            )
+                        )
+
+                    if temp:
+                        avg_span = torch.stack(temp, dim=0).mean(dim=0)
+                    else:
+                        avg_span = torch.zeros_like(
+                            hidden_state[0]
+                        )  # fallback if no temporal span
+
+                    temporal_hidden_states.append(avg_span)
+
+                return pooled_hidden_states, torch.stack(temporal_hidden_states)
+            else:
+                return self.encode_query(psg)
+        else:
+            task = "retrieval.passage"
+            task_id = self.encoder._adaptation_map[task]
+            adapter_mask = torch.full(
+                (psg["input_ids"].size(0),),
+                task_id,
+                dtype=torch.int32,
+                device=psg["input_ids"].device,
+            )
+            query_hidden_states = self.encoder(
+                **psg,
+                return_dict=True,
+                adapter_mask=adapter_mask,
+            )
+            query_hidden_states = query_hidden_states.last_hidden_state[:, :, :768]
+
+            return self._pooling(query_hidden_states, psg["attention_mask"])
+
+    def forward(
+        self,
+        query: Dict[str, Tensor] = None,
+        passage: Dict[str, Tensor] = None,
+    ):
+        if self.training:
+
+            q_reps = self.encode_query(query) if query else None
+
+            passage, temporal_span_list = passage
+            p_reps, p_temporal_reps = self.encode_passage(passage, temporal_span_list)
+
+            loss, loss_partial = self.compute_loss(
+                q_reps,
+                p_reps,
+                p_temporal_reps,
+            )
+            losses = {"loss": loss}
+            losses.update(loss_partial)
+
+            return losses
         else:
             # Copy from EncoderModel's forward
             q_reps = self.encode_query(query) if query else None

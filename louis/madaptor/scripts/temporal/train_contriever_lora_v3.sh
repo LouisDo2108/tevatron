@@ -37,7 +37,7 @@ OUTPUT_DIR_ROOT=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron
 DATA_NAME=temporal_nobel_prize
 MODEL_NAME=ts-retriever
 BACKBONE=contriever
-EXP_NAME=ts-retriever_10epoch_temp0.05_lora_bf16
+EXP_NAME=naive_temporal_v2_5epoch_temp0.05_lora_bf16_with_temporal_projector
 OUTPUT_DIR=$OUTPUT_DIR_ROOT/$DATA_NAME/$MODEL_NAME/$BACKBONE/$EXP_NAME
 
 CHECKPOINT_DIR=facebook/contriever
@@ -49,8 +49,9 @@ mkdir -p $OUTPUT_DIR # Create folder if not exists
 
 # negative_size = self.data_args.train_group_size - 1
 # lora target modules for contriever: query,key,value,dense,word_embeddings,position_embeddings
+
 # ==== TRAIN RETRIEVER ====
-python src/tevatron/retriever/driver/train.py \
+python /home/thuy0050/code/tevatron/louis/madaptor/train_tsretriever_with_temporal_v3.py \
   --do_train \
   --pooling avg \
   --bf16 \
@@ -60,19 +61,20 @@ python src/tevatron/retriever/driver/train.py \
   --per_device_train_batch_size 64 \
   --learning_rate 1e-4 \
   --temperature 0.05 \
-  --logging_steps 100 \
-  --num_train_epochs 10 \
+  --logging_steps 10 \
+  --num_train_epochs 5 \
+  --attn_implementation sdpa \
   --lora \
   --lora_r 4 \
   --lora_alpha 16 \
-  --lora_target_modules all-linear \
-  --attn_implementation sdpa \
+  --lora_target_modules query,key,value,dense \
   --dataset_name $DATA_ROOT_DIR/tevatron/Tevatron___msmarco-passage  \
-  --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/train.jsonl \
+  --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/train_temporal_v2.jsonl \
   --model_name_or_path $CHECKPOINT_DIR \
   --run_name $BACKBONE\_$EXP_NAME \
   --output_dir $OUTPUT_DIR \
-  --overwrite_output_dir
+  --overwrite_output_dir \
+  --report_to none
 
 # --dataset_path Modify inside the code
 # data_args.dataset_path = {
@@ -95,6 +97,7 @@ python src/tevatron/retriever/driver/encode.py \
   --model_name_or_path $OUTPUT_DIR \
   --lora_name_or_path $OUTPUT_DIR \
   --overwrite_output_dir
+
 
 # ==== ENCODE QUERIES ==== 
 python src/tevatron/retriever/driver/encode.py \

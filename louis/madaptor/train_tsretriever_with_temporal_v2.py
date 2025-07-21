@@ -10,9 +10,9 @@ from utils import init, write_json, get_params_info
 import torch
 from transformers import AutoTokenizer
 
-from madaptor import NaiveTemporal as Model
+from madaptor import NaiveTemporalv2 as Model
 from dataset import NaiveTemporalDataset as TrainDataset
-from collator import NaiveTemporalCollator as TrainCollator
+from collator import NaiveTemporalv2Collator as TrainCollator
 from trainer import MAdaptorTrainer as Trainer
 
 from tevatron.retriever.gc_trainer import GradCacheTrainer as GCTrainer

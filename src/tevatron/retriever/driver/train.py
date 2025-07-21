@@ -52,10 +52,14 @@ def set_seed(seed: int, deterministic: bool = True):
         if deterministic:
             # set a debug environment variable CUBLAS_WORKSPACE_CONFIG to :16:8 (may limit overall performance) or :4096:8 (will increase library footprint in GPU memory by approximately 24MiB). From https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility
 
-            os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
+            # os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
             os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
             os.environ["FLASH_ATTENTION_DETERMINISTIC"] = "1"
             torch.use_deterministic_algorithms(True)
+
+            # # Enable CUDNN deterministic mode
+            # torch.backends.cudnn.deterministic = True
+            # torch.backends.cudnn.benchmark = False
 
 
 def write_json(file_path, data, jsonl=False):
@@ -155,7 +159,7 @@ def main():
         model_args,
         training_args,
         cache_dir=model_args.cache_dir,
-        torch_dtype=torch_dtype,
+        # torch_dtype=torch_dtype,
         attn_implementation=model_args.attn_implementation,
     )
 
