@@ -105,6 +105,7 @@ python src/tevatron/retriever/driver/encode.py \
   --attn_implementation sdpa \
   --dataset_name LouisDo2108/temporal-nobel-prize \
   --dataset_config query \
+  --query_instruction "Represent this sentence for searching relevant passages: " \
   --model_name_or_path $OUTPUT_DIR \
   --encode_output_path $OUTPUT_DIR/queries_emb.pkl \
   --overwrite_output_dir
@@ -139,3 +140,11 @@ python -m tevatron.utils.format.convert_result_to_marco \
 python -m pyserini.eval.msmarco_passage_eval \
   $DATA_ROOT_DIR/temporal/temporal_nobel_prize/test/qrel.txt \
   $OUTPUT_DIR/rank.msmarco
+
+#  $OUTPUT_DIR \
+python louis/nanobeir_scripts/eval_nanobeir_with_sbert.py \
+    --model_name_or_path $CHECKPOINT_DIR \
+    --nanobeir_datasets NQ \
+    --query_prompts "Represent this sentence for searching relevant passages: " \
+    --pooling cls \
+    --bf16

@@ -222,7 +222,7 @@ class NaiveTemporalDataset(SupervisedMAdaptorDataset):
             split=self.data_args.dataset_split,
             cache_dir=self.data_args.dataset_cache_dir,
             num_proc=self.data_args.num_proc,
-        )
+        )   
 
         # Load corpus if provided
         if self.data_args.corpus_name is None and corpus_name is None:

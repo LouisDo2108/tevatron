@@ -36,6 +36,7 @@ def set_seed(seed: int, deterministic: bool = True):
     np.random.seed(seed)
     if is_torch_available():
         torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
         # ^^ safe to call this function even if cuda is not available
         if deterministic:

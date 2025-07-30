@@ -12,6 +12,7 @@ from transformers import AutoTokenizer
 
 from madaptor import NaiveTemporalv3 as Model
 from dataset import NaiveTemporalDataset as TrainDataset
+from tevatron.retriever.dataset import TrainDataset as EvalDataset
 from collator import NaiveTemporalv2Collator as TrainCollator
 from trainer import MAdaptorTrainer as Trainer
 
@@ -57,6 +58,11 @@ def main():
     )
 
     train_dataset = TrainDataset(data_args)
+
+    eval_data_args = deepcopy(data_args)
+    eval_data_args.dataset_path = data_args.eval_dataset_path
+
+    eval_dataset = EvalDataset(eval_data_args)
     collator = TrainCollator(data_args, tokenizer)
 
     trainer_cls = GCTrainer if training_args.grad_cache else Trainer
@@ -64,9 +70,11 @@ def main():
         model=model,
         args=training_args,
         train_dataset=train_dataset,
+        eval_dataset=eval_dataset,
         data_collator=collator,
     )
     train_dataset.set_trainer(trainer)
+    eval_dataset.set_trainer(trainer)
 
     last_checkpoint = None
     # if os.path.isdir(training_args.output_dir):

@@ -6,12 +6,16 @@ import os
 from collections import defaultdict
 from collections.abc import Iterator
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-
+import time
+import math
+from pdb import set_trace as st
 import safetensors.torch
 import torch
 import torch.distributed as dist
+import torch.nn.functional as F
 from transformers.trainer import TRAINING_ARGS_NAME
-from transformers.trainer_utils import SaveStrategy
+from transformers.trainer_utils import SaveStrategy, speed_metrics, has_length
+from transformers.trainer_pt_utils import find_batch_size, EvalLoopContainer
 
 from tevatron.retriever.trainer import TevatronTrainer
 
@@ -154,18 +158,27 @@ class MAdaptorTrainer(TevatronTrainer):
             state_dict = self.model.state_dict()
             prefix = "encoder."
             model_state_dict = {k[len(prefix) :]: v for k, v in state_dict.items() if k.startswith(prefix)}
-            adapter_state_dict = {k[8:]:v for k, v in state_dict.items() if k.startswith("adaptor.")}
+
+            ### Enable this if use madaptor ###
+            # adapter_state_dict = {k[8:]:v for k, v in state_dict.items() if k.startswith("adaptor.")}
+            # safetensors.torch.save_file(
+            #     adapter_state_dict, os.path.join(output_dir, "adaptor.safetensors")
+            # )
+
             self.model.encoder.save_pretrained(
                 output_dir,
                 state_dict=model_state_dict,
                 safe_serialization=self.args.save_safetensors,
             )
-            safetensors.torch.save_file(
-                adapter_state_dict, os.path.join(output_dir, "adaptor.safetensors")
-            )
 
         if self.tokenizer is not None:
             self.tokenizer.save_pretrained(output_dir)
+        elif (
+            self.data_collator is not None
+            and hasattr(self.data_collator, "tokenizer")
+            and self.data_collator.tokenizer is not None
+        ):
+            self.data_collator.tokenizer.save_pretrained(output_dir)
 
         # Good practice: save your training arguments together with the trained model
         torch.save(self.args, os.path.join(output_dir, TRAINING_ARGS_NAME))
@@ -175,12 +188,33 @@ class MAdaptorTrainer(TevatronTrainer):
     ):
         query, doc = inputs  # query is a dummy list, doc contains (docid, doc)
         outputs = model(query=query, passage=doc)
+
         loss = outputs.pop("loss")
 
         for loss_name, some_loss in outputs.items():
             self.other_losses[loss_name] += some_loss / self.args.gradient_accumulation_steps
 
         return (loss, outputs) if return_outputs else loss
+
+    def eval_step(self, model, inputs):
+        query, passage = inputs
+        q_reps = model.encode_query(query) if query else None
+
+        p_reps = model.encode_passage(passage) if passage else None
+
+        scores_semantic = self.model.compute_similarity(q_reps, p_reps)
+
+        num_neg = p_reps.size(0) // q_reps.size(0)
+        target = torch.arange(
+            scores_semantic.size(0),
+            device=scores_semantic.device,
+            dtype=torch.long,
+        )
+        target = target * num_neg
+
+        loss = F.cross_entropy(scores_semantic / self.model.temperature, target, reduction="none")
+        # losses = {"loss": loss}
+        return loss
 
     def training_step(self, *args):
         return (
@@ -265,6 +299,178 @@ class MAdaptorTrainer(TevatronTrainer):
             self.control = self.callback_handler.on_save(
                 self.args, self.state, self.control
             )
+
+    def evaluate(
+        self,
+        eval_dataset: Optional[Union[Dataset, dict[str, Dataset]]] = None,
+        ignore_keys: Optional[list[str]] = None,
+        metric_key_prefix: str = "eval",
+    ) -> dict[str, float]:
+        """
+        Run evaluation and returns metrics.
+
+        The calling script will be responsible for providing a method to compute metrics, as they are task-dependent
+        (pass it to the init `compute_metrics` argument).
+
+        You can also subclass and override this method to inject custom behavior.
+
+        Args:
+            eval_dataset (Union[`Dataset`, dict[str, `Dataset`]), *optional*):
+                Pass a dataset if you wish to override `self.eval_dataset`. If it is a [`~datasets.Dataset`], columns
+                not accepted by the `model.forward()` method are automatically removed. If it is a dictionary, it will
+                evaluate on each dataset, prepending the dictionary key to the metric name. Datasets must implement the
+                `__len__` method.
+
+                <Tip>
+
+                If you pass a dictionary with names of datasets as keys and datasets as values, evaluate will run
+                separate evaluations on each dataset. This can be useful to monitor how training affects other
+                datasets or simply to get a more fine-grained evaluation.
+                When used with `load_best_model_at_end`, make sure `metric_for_best_model` references exactly one
+                of the datasets. If you, for example, pass in `{"data1": data1, "data2": data2}` for two datasets
+                `data1` and `data2`, you could specify `metric_for_best_model="eval_data1_loss"` for using the
+                loss on `data1` and `metric_for_best_model="eval_data2_loss"` for the loss on `data2`.
+
+                </Tip>
+
+            ignore_keys (`list[str]`, *optional*):
+                A list of keys in the output of your model (if it is a dictionary) that should be ignored when
+                gathering predictions.
+            metric_key_prefix (`str`, *optional*, defaults to `"eval"`):
+                An optional prefix to be used as the metrics key prefix. For example the metrics "bleu" will be named
+                "eval_bleu" if the prefix is "eval" (default)
+
+        Returns:
+            A dictionary containing the evaluation loss and the potential metrics computed from the predictions. The
+            dictionary also contains the epoch number which comes from the training state.
+        """
+        # handle multiple eval datasets
+        override = eval_dataset is not None
+        eval_dataset = eval_dataset if override else self.eval_dataset
+
+        # memory metrics - must set up as early as possible
+        self._memory_tracker.start()
+
+        eval_dataloader = self.get_eval_dataloader(eval_dataset)
+
+        start_time = time.time()
+
+        args = self.args
+        # with self.compute_loss_context_manager():
+        #     for inputs in eval_dataloader:
+        #         loss = self.compute_loss(model, inputs)
+
+        # eval_loop = (
+        #     self.prediction_loop
+        #     if self.args.use_legacy_prediction_loop
+        #     else self.evaluation_loop
+        # )
+        # output = eval_loop(
+        #     eval_dataloader,
+        #     description="Evaluation",
+        #     # No point gathering the predictions if there are no metrics, otherwise we defer to
+        #     # self.args.prediction_loss_only
+        #     prediction_loss_only=True if self.compute_metrics is None else None,
+        #     ignore_keys=ignore_keys,
+        #     metric_key_prefix=metric_key_prefix,
+        # )
+
+        model = self._wrap_model(self.model, training=False, dataloader=eval_dataloader)
+
+        if len(self.accelerator._models) == 0 and model is self.model:
+            start_time = time.time()
+            model = (
+                self.accelerator.prepare(model)
+                if self.is_deepspeed_enabled
+                or (
+                    self.is_fsdp_enabled
+                    and self.accelerator.mixed_precision != "fp8"
+                    and not self.args.torch_compile
+                )
+                else self.accelerator.prepare_model(model, evaluation_mode=True)
+            )
+            self.model_preparation_time = round(time.time() - start_time, 4)
+
+            if self.is_fsdp_enabled:
+                self.model = model
+
+            # for the rest of this function `model` is the outside model, whether it was wrapped or not
+            if model is not self.model:
+                self.model_wrapped = model
+
+            # backward compatibility
+            if self.is_deepspeed_enabled:
+                self.deepspeed = self.model_wrapped
+
+        # if full fp16 or bf16 eval is wanted and this ``evaluation`` or ``predict`` isn't called
+        # while ``train`` is running, cast it to the right dtype first and then put on device
+        if not self.is_in_train:
+            if args.fp16_full_eval:
+                model = model.to(dtype=torch.float16, device=args.device)
+            elif args.bf16_full_eval:
+                model = model.to(dtype=torch.bfloat16, device=args.device)
+
+        batch_size = self.args.eval_batch_size
+
+        # logger.info(f"\n***** Running {description} *****")
+        if has_length(eval_dataloader):
+            logger.info(f"  Num examples = {self.num_examples(eval_dataloader)}")
+        else:
+            logger.info("  Num examples: Unknown")
+        logger.info(f"  Batch size = {batch_size}")
+
+        model.eval()
+        if hasattr(self.optimizer, "eval") and callable(self.optimizer.eval):
+            self.optimizer.eval()
+
+        # # This is for NaiveTemporalv4
+        # adapters = ["semantic", "temporal"]
+        # weights = [1.0, 1.0]
+        # adapter_name = "merge"
+        # density = 0.2
+        # model.encoder.add_weighted_adapter(
+        #     adapters, weights, adapter_name, combination_type="dare_ties", density=density
+        # )
+        # model.encoder.set_adapter("merge")
+
+        self.callback_handler.eval_dataloader = eval_dataloader
+        # Do this before wrapping.
+        eval_dataset = getattr(eval_dataloader, "dataset", None)
+
+        metrics = None
+        eval_set_kwargs = {}
+
+        # Will be useful when we have an iterable dataset so don't know its length.
+        observed_num_examples = 0
+
+        # Main evaluation loop
+        total_loss = []
+        with torch.no_grad():
+            for step, inputs in enumerate(eval_dataloader):
+                # Update the observed num examples
+                observed_batch_size = find_batch_size(inputs)
+                if observed_batch_size is not None:
+                    observed_num_examples += observed_batch_size
+                    # For batch samplers, batch_size is not known by the dataloader in advance.
+                    if batch_size is None:
+                        batch_size = observed_batch_size
+                    with self.compute_loss_context_manager():
+                        loss = self.eval_step(
+                            model, inputs
+                        )
+                    # loss = loss.detach().mean()
+                    total_loss.append(loss)
+
+        eval_loss = {"eval_loss": round(torch.concat(total_loss).mean().item(), 4)}
+        self.log(eval_loss)
+
+        self.control = self.callback_handler.on_evaluate(
+            self.args, self.state, self.control, total_loss
+        )
+
+        self._memory_tracker.stop_and_update_metrics(eval_loss)  # output.metrics)
+
+        return eval_loss # output.metrics
 
 
 class SentenceTransformerStyleTrainer(MAdaptorTrainer):

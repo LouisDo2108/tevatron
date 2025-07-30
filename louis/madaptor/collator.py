@@ -266,27 +266,9 @@ class NaiveTemporalCollator(TrainCollator):
             pad_to_multiple_of=self.data_args.pad_to_multiple_of,
             return_tensors="pt",
         )
-        # corpus_collated = self.tokenizer(
-        #     all_corpus,
-        #     padding=True,
-        #     truncation=True,
-        #     max_length=(
-        #         self.data_args.passage_max_len - 1
-        #         if self.data_args.append_eos_token
-        #         else self.data_args.passage_max_len
-        #     ),
-        #     return_attention_mask=True,
-        #     return_token_type_ids=False,
-        #     add_special_tokens=True,
-        #     pad_to_multiple_of=self.data_args.pad_to_multiple_of,
-        #     return_tensors="pt",
-        # )
         return q_collated, (
             d_collated,
             d_temporal_collated,
-            # all_corpus_docid,
-            # all_corpus_chunkid,
-            # corpus_collated,
         )
 
 
@@ -300,27 +282,30 @@ class NaiveTemporalv2Collator(TrainCollator):
         :return: tokenized query_ids, passage_ids
         """
         all_queries = [f[0] for f in features]
+        all_queries = [q[0] for q in all_queries]
+
         all_passages = []
         for f in features:
             all_passages.extend(f[1])
 
-        all_queries = [q[0] for q in all_queries]
+        if len(features[0]) == 2:
+            all_passages = [p[0] for p in all_passages]
+        elif len(features[0]) == 3:
+            all_passages = []
+            char_spans = []  # flat list of (start_char, end_char) per passage
+            span_counts = []  # how many spans per passage, to reconstruct later
 
-        all_passages = []
-        char_spans = []  # flat list of (start_char, end_char) per passage
-        span_counts = []  # how many spans per passage, to reconstruct later
-
-        # Step 1: Collect passages and raw char spans (faster than nested temp lists)
-        for training_sample in [f[1] for f in features]:
-            for passage, passage_temporal in training_sample:
-                all_passages.append(passage)
-                curr_spans = []
-                for t in passage_temporal:
-                    start = passage.find(t)
-                    if start != -1:
-                        curr_spans.append((start, start + len(t)))
-                char_spans.extend(curr_spans)
-                span_counts.append(len(curr_spans))
+            # Step 1: Collect passages and raw char spans (faster than nested temp lists)
+            for training_sample in [f[1] for f in features]:
+                for passage, passage_temporal in training_sample:
+                    all_passages.append(passage)
+                    curr_spans = []
+                    for t in passage_temporal:
+                        start = passage.find(t)
+                        if start != -1:
+                            curr_spans.append((start, start + len(t)))
+                    char_spans.extend(curr_spans)
+                    span_counts.append(len(curr_spans))
 
         q_collated = self.tokenizer(
             all_queries,
@@ -353,6 +338,11 @@ class NaiveTemporalv2Collator(TrainCollator):
             return_tensors="pt",
             return_offsets_mapping=True,  # Step 2: Tokenize with offset mapping
         )
+
+        if len(features[0]) == 2:
+            # Fall back to encoder dataset collater used for evaluation
+            d_collated.pop("offset_mapping", None)  # Remove offset mapping
+            return q_collated, d_collated
 
         # Step 3: Map char spans to token spans
         temporal_token_spans = []

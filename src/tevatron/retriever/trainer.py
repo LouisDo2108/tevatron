@@ -5,7 +5,6 @@ from typing import Optional
 import torch
 import torch.distributed as dist
 from transformers.trainer import TRAINING_ARGS_NAME, Trainer
-import wandb
 
 from .modeling import EncoderModel
 
@@ -45,6 +44,12 @@ class TevatronTrainer(Trainer):
 
         if self.tokenizer is not None:
             self.tokenizer.save_pretrained(output_dir)
+        elif (
+            self.data_collator is not None
+            and hasattr(self.data_collator, "tokenizer")
+            and self.data_collator.tokenizer is not None
+        ):
+            self.data_collator.tokenizer.save_pretrained(output_dir)
 
         # Good practice: save your training arguments together with the trained model
         torch.save(self.args, os.path.join(output_dir, TRAINING_ARGS_NAME))

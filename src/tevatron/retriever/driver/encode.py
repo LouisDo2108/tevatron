@@ -3,13 +3,14 @@ import os
 import pickle
 import sys
 from contextlib import nullcontext
-from pprint import pprint
 
+import random
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import AutoTokenizer, HfArgumentParser
+from transformers.utils.import_utils import is_torch_available
 
 from tevatron.retriever.arguments import DataArguments, ModelArguments
 from tevatron.retriever.arguments import TevatronTrainingArguments as TrainingArguments
@@ -18,6 +19,36 @@ from tevatron.retriever.dataset import EncodeDataset
 from tevatron.retriever.modeling import DenseModel, EncoderOutput
 
 logger = logging.getLogger(__name__)
+
+
+def set_seed(seed: int, deterministic: bool = True):
+    # Copy from transformers.trainer_utilss.set_seed with some modifications
+    """
+    Helper function for reproducible behavior to set the seed in `random`, `numpy`, `torch` and/or `tf` (if installed).
+
+    Args:
+        seed (`int`):
+            The seed to set.
+        deterministic (`bool`, *optional*, defaults to `False`):
+            Whether to use deterministic algorithms where available. Can slow down training.
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    if is_torch_available():
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        # ^^ safe to call this function even if cuda is not available
+        if deterministic:
+            # set a debug environment variable CUBLAS_WORKSPACE_CONFIG to :16:8 (may limit overall performance) or :4096:8 (will increase library footprint in GPU memory by approximately 24MiB). From https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility
+
+            # os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
+            os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+            os.environ["FLASH_ATTENTION_DETERMINISTIC"] = "1"
+            torch.use_deterministic_algorithms(True)
+
+            # # Enable CUDNN deterministic mode
+            # torch.backends.cudnn.deterministic = True
+            # torch.backends.cudnn.benchmark = False
 
 
 def main():
@@ -98,7 +129,7 @@ def main():
     for (batch_ids, batch) in tqdm(encode_loader):
         lookup_indices.extend(batch_ids)
         with (
-            torch.amp.autocast(
+            torch.autocast(
                 "cuda", dtype=torch.float16 if training_args.fp16 else torch.bfloat16
             )
             if training_args.fp16 or training_args.bf16

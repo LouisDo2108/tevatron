@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, List
 
 from transformers.training_args import TrainingArguments
 
@@ -216,6 +216,7 @@ class DataArguments:
     query_instruction: str = field(
         default="",
     )
+    eval_dataset_path: str = field(default=None)  # type:ignore
 
 
 @dataclass
@@ -233,9 +234,20 @@ class TevatronTrainingArguments(TrainingArguments):
     max_length: int = field(default=512)
     seed: int = field(default=42)
     data_seed: int = field(default=42)
+
+    # For SentenceBertStyle dataset
     batch_sampler: BatchSamplers = field(
         default=BatchSamplers.BATCH_SAMPLER,
     )
     multi_dataset_batch_sampler: MultiDatasetBatchSamplers = field(
         default=MultiDatasetBatchSamplers.PROPORTIONAL,
     )
+    modules_to_save: List[str] = field(default_factory=lambda: [])
+
+    # For evaluation
+    eval_on_start: bool = field(default=True)
+    eval_strategy: str = field(default="epoch")
+    save_strategy: str = field(default="best")
+    load_best_model_at_end: bool = field(default=True)
+    prediction_loss_only: bool = field(default=True)
+    per_device_eval_batch_size: int = field(default=128)

@@ -37,7 +37,7 @@ OUTPUT_DIR_ROOT=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron
 DATA_NAME=nanobeir/nq
 MODEL_NAME=ts-retriever
 BACKBONE=contriever
-EXP_NAME=naive_temporal_v2_5epoch_temp0.05_lora_bf16_with_temporal_projector
+EXP_NAME=naive_temporal_5epoch_temp0.05_lora_bf16
 OUTPUT_DIR=$OUTPUT_DIR_ROOT/$DATA_NAME/$MODEL_NAME/$BACKBONE/$EXP_NAME
 MODEL_DIR=$OUTPUT_DIR_ROOT/temporal_nobel_prize/$MODEL_NAME/$BACKBONE/$EXP_NAME
 
@@ -61,8 +61,8 @@ python -m tevatron.retriever.driver.encode \
   --dataset_config corpus \
   --dataset_split train \
   --encode_output_path $OUTPUT_DIR/corpus.pkl \
-  --model_name_or_path $MODEL_DIR \
   --lora_name_or_path $MODEL_DIR \
+  --model_name_or_path $MODEL_DIR \
   --overwrite_output_dir
 
 # Encode queries
@@ -78,9 +78,10 @@ python -m tevatron.retriever.driver.encode \
   --dataset_config queries \
   --dataset_split train \
   --encode_output_path $OUTPUT_DIR/query.pkl \
-  --model_name_or_path $MODEL_DIR \
   --lora_name_or_path $MODEL_DIR \
+  --model_name_or_path $MODEL_DIR \
   --overwrite_output_dir
+
 
 # Perform retrieval
 set -f && OMP_NUM_THREADS=12 python -m tevatron.retriever.driver.search \

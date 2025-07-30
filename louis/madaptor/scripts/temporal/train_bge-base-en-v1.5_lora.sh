@@ -37,7 +37,7 @@ OUTPUT_DIR_ROOT=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron
 DATA_NAME=temporal_nobel_prize
 MODEL_NAME=ts-retriever
 BACKBONE=bge-base-en-v1.5
-EXP_NAME=naive_temporal_5epoch_temp0.02_lora-only-layer11-dense_with_query-instruction
+EXP_NAME=naive_temporal_v3_5epoch_temp0.05_lora_bf16_dev
 OUTPUT_DIR=$OUTPUT_DIR_ROOT/$DATA_NAME/$MODEL_NAME/$BACKBONE/$EXP_NAME
 
 CHECKPOINT_DIR=BAAI/bge-base-en-v1.5
@@ -52,7 +52,7 @@ mkdir -p $OUTPUT_DIR # Create folder if not exists
 
 # Jina v2 already calculates cosine similarity during training
 # ==== TRAIN RETRIEVER ====
-python /home/thuy0050/code/tevatron/louis/madaptor/train_tsretriever_with_temporal.py \
+python louis/madaptor/train_tsretriever_with_temporal_v3.py \
   --do_train \
   --pooling cls \
   --bf16 \
@@ -64,19 +64,24 @@ python /home/thuy0050/code/tevatron/louis/madaptor/train_tsretriever_with_tempor
   --learning_rate 1e-4 \
   --temperature 0.02 \
   --logging_steps 100 \
-  --num_train_epochs 5 \
   --attn_implementation sdpa \
+  --num_train_epochs 5 \
   --lora \
   --lora_r 4 \
   --lora_alpha 16 \
   --lora_target_modules layer.11.intermediate.dense,layer.11.output.dense \
+  --modules_to_save temporal_projector \
   --query_instruction "Represent this sentence for searching relevant passages: " \
   --dataset_name $DATA_ROOT_DIR/tevatron/Tevatron___msmarco-passage  \
-  --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/train_temporal.jsonl \
+  --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/train_temporal_v2.jsonl \
+  --eval_dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/dev.jsonl \
   --model_name_or_path $CHECKPOINT_DIR \
   --run_name $BACKBONE\_$EXP_NAME \
   --output_dir $OUTPUT_DIR \
   --overwrite_output_dir
+
+# --num_train_epochs 5 \
+# layer.11.intermediate.dense,layer.11.output.dense \
 
 # --dataset_path Modify inside the code
 # data_args.dataset_path = {
@@ -84,66 +89,73 @@ python /home/thuy0050/code/tevatron/louis/madaptor/train_tsretriever_with_tempor
 #     "dev": "$DATA_ROOT_DIR/temporal/nobel_prize/train/dev.jsonl",
 # }
 
-# Scaled Dot Product Attention, for BERT
-# ==== ENCODE CORPUS ====
-python src/tevatron/retriever/driver/encode.py \
-  --per_device_eval_batch_size 512 \
-  --passage_max_len 512 \
-  --pooling cls \
-  --bf16 \
-  --normalize \
-  --attn_implementation sdpa \
-  --dataset_name LouisDo2108/temporal-nobel-prize \
-  --dataset_config corpus \
-  --encode_output_path $OUTPUT_DIR/corpus_emb.pkl \
-  --model_name_or_path $OUTPUT_DIR \
-  --lora_name_or_path $OUTPUT_DIR \
-  --overwrite_output_dir
+# # Scaled Dot Product Attention, for BERT
+# # ==== ENCODE CORPUS ====
+# python src/tevatron/retriever/driver/encode.py \
+#   --per_device_eval_batch_size 512 \
+#   --passage_max_len 512 \
+#   --pooling cls \
+#   --bf16 \
+#   --normalize \
+#   --attn_implementation sdpa \
+#   --dataset_name LouisDo2108/temporal-nobel-prize \
+#   --dataset_config corpus \
+#   --encode_output_path $OUTPUT_DIR/corpus_emb.pkl \
+#   --model_name_or_path $OUTPUT_DIR \
+#   --lora_name_or_path $OUTPUT_DIR \
+#   --overwrite_output_dir
 
-# ==== ENCODE QUERIES ==== 
-python src/tevatron/retriever/driver/encode.py \
-  --per_device_eval_batch_size 512 \
-  --query_max_len 512 \
-  --pooling cls \
-  --bf16 \
-  --normalize \
-  --attn_implementation sdpa \
-  --encode_is_query \
-  --query_instruction "Represent this sentence for searching relevant passages: " \
-  --dataset_name LouisDo2108/temporal-nobel-prize \
-  --dataset_config query \
-  --model_name_or_path $OUTPUT_DIR \
-  --lora_name_or_path $OUTPUT_DIR \
-  --encode_output_path $OUTPUT_DIR/queries_emb.pkl \
-  --overwrite_output_dir
+# # ==== ENCODE QUERIES ==== 
+# python src/tevatron/retriever/driver/encode.py \
+#   --per_device_eval_batch_size 512 \
+#   --query_max_len 512 \
+#   --pooling cls \
+#   --bf16 \
+#   --normalize \
+#   --attn_implementation sdpa \
+#   --encode_is_query \
+#   --query_instruction "Represent this sentence for searching relevant passages: " \
+#   --dataset_name LouisDo2108/temporal-nobel-prize \
+#   --dataset_config query \
+#   --model_name_or_path $OUTPUT_DIR \
+#   --lora_name_or_path $OUTPUT_DIR \
+#   --encode_output_path $OUTPUT_DIR/queries_emb.pkl \
+#   --overwrite_output_dir
 
-# ==== RETRIEVAL ====  
-set -f && OMP_NUM_THREADS=12 python -m tevatron.retriever.driver.search \
-    --query_reps $OUTPUT_DIR/queries_emb.pkl \
-    --passage_reps $OUTPUT_DIR/corpus_emb.pkl \
-    --depth 100 \
-    --batch_size 512 \
-    --save_text \
-    --save_ranking_to $OUTPUT_DIR/rank.txt
+# # ==== RETRIEVAL ====  
+# set -f && OMP_NUM_THREADS=12 python -m tevatron.retriever.driver.search \
+#     --query_reps $OUTPUT_DIR/queries_emb.pkl \
+#     --passage_reps $OUTPUT_DIR/corpus_emb.pkl \
+#     --depth 100 \
+#     --batch_size 512 \
+#     --save_text \
+#     --save_ranking_to $OUTPUT_DIR/rank.txt
 
-# ==== CONVERT TO TREC FORMAT ====  
-python -m tevatron.utils.format.convert_result_to_trec \
-    --input $OUTPUT_DIR/rank.txt \
-    --output $OUTPUT_DIR/rank.trec \
-    --remove_query
+# # ==== CONVERT TO TREC FORMAT ====  
+# python -m tevatron.utils.format.convert_result_to_trec \
+#     --input $OUTPUT_DIR/rank.txt \
+#     --output $OUTPUT_DIR/rank.trec \
+#     --remove_query
 
-# ==== EVALUATE RESULTS USING PYSERINI ====
-python -m pyserini.eval.trec_eval -c \
-  -mP.10 -mrecall.10 -mndcg_cut.10 -mrecip_rank -mmap \
-  $DATA_ROOT_DIR/temporal/temporal_nobel_prize/test/qrel.txt \
-  $OUTPUT_DIR/rank.trec
+# # ==== EVALUATE RESULTS USING PYSERINI ====
+# python -m pyserini.eval.trec_eval -c \
+#   -mP.10 -mrecall.10 -mndcg_cut.10 -mrecip_rank -mmap \
+#   $DATA_ROOT_DIR/temporal/temporal_nobel_prize/test/qrel.txt \
+#   $OUTPUT_DIR/rank.trec
 
-# ==== CONVERT TO MSMARCO FORMAT ====  
-python -m tevatron.utils.format.convert_result_to_marco \
-    --input $OUTPUT_DIR/rank.txt \
-    --output $OUTPUT_DIR/rank.msmarco \
+# # ==== CONVERT TO MSMARCO FORMAT ====  
+# python -m tevatron.utils.format.convert_result_to_marco \
+#     --input $OUTPUT_DIR/rank.txt \
+#     --output $OUTPUT_DIR/rank.msmarco \
 
-# Calculate MRR@k with Pyserini's MSMARCO script
-python -m pyserini.eval.msmarco_passage_eval \
-  $DATA_ROOT_DIR/temporal/temporal_nobel_prize/test/qrel.txt \
-  $OUTPUT_DIR/rank.msmarco
+# # Calculate MRR@k with Pyserini's MSMARCO script
+# python -m pyserini.eval.msmarco_passage_eval \
+#   $DATA_ROOT_DIR/temporal/temporal_nobel_prize/test/qrel.txt \
+#   $OUTPUT_DIR/rank.msmarco
+
+# python louis/nanobeir_scripts/eval_nanobeir_with_sbert.py \
+#     --model_name_or_path $OUTPUT_DIR \
+#     --nanobeir_datasets NQ \
+#     --query_prompts "Represent this sentence for searching relevant passages: " \
+#     --pooling cls \
+#     --bf16

@@ -7,15 +7,20 @@ from contextlib import nullcontext
 import numpy as np
 import torch
 from madaptor import UnsupervisedMAdaptor, UnsupervisedTemporalMAdaptor, SupervisedMAdaptor
+
+from madaptor import NaiveTemporalv4 as DenseModel
+
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from transformers import AutoTokenizer, HfArgumentParser, set_seed
+from transformers import AutoTokenizer, HfArgumentParser
 
 from tevatron.retriever.arguments import DataArguments, ModelArguments
 from tevatron.retriever.arguments import TevatronTrainingArguments as TrainingArguments
 from tevatron.retriever.collator import EncodeCollator
 from tevatron.retriever.dataset import EncodeDataset
 from tevatron.retriever.modeling import EncoderOutput
+from utils import set_seed
+
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +62,7 @@ def main():
     else:
         torch_dtype = torch.float32
 
-    model = UnsupervisedTemporalMAdaptor.load(
+    model = DenseModel.load(
         model_args.model_name_or_path,
         pooling=model_args.pooling,
         normalize=model_args.normalize,
