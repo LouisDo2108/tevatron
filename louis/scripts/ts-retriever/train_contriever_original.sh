@@ -12,7 +12,7 @@
 #SBATCH --ntasks=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=256G
+#SBATCH --mem=512G
 
 #SBATCH --mail-user=tuan.huynh1@monash.edu
 #SBATCH --mail-type=BEGIN,END,FAIL
@@ -36,11 +36,11 @@ OUTPUT_DIR_ROOT=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron
 
 DATA_NAME=temporal_nobel_prize
 MODEL_NAME=ts-retriever
-BACKBONE=bge-base-en-v1.5
-EXP_NAME=naive_temporal_5epoch_temp0.05
+BACKBONE=contriever
+EXP_NAME=provided_checkpoint_ts-retriever
 OUTPUT_DIR=$OUTPUT_DIR_ROOT/$DATA_NAME/$MODEL_NAME/$BACKBONE/$EXP_NAME
 
-CHECKPOINT_DIR=BAAI/bge-base-en-v1.5
+CHECKPOINT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron/temporal_nobel_prize/ts-retriever/contriever/original-ts-retriever/models/Tscontriever # facebook/contriever
 
 export WANDB_ENTITY=htluc19
 export WANDB_PROJECT=temporal
@@ -49,29 +49,25 @@ mkdir -p $OUTPUT_DIR # Create folder if not exists
 
 # negative_size = self.data_args.train_group_size - 1
 
-
-# Jina v2 already calculates cosine similarity during training
-# ==== TRAIN RETRIEVER ====
-python /home/thuy0050/code/tevatron/louis/madaptor/train_tsretriever_with_temporal.py \
-  --do_train \
-  --pooling cls \
-  --bf16 \
-  --normalize \
-  --train_group_size 2 \
-  --query_max_len 512 \
-  --passage_max_len 512 \
-  --per_device_train_batch_size 64 \
-  --learning_rate 1e-4 \
-  --temperature 0.05 \
-  --logging_steps 100 \
-  --num_train_epochs 5 \
-  --attn_implementation sdpa \
-  --dataset_name $DATA_ROOT_DIR/tevatron/Tevatron___msmarco-passage  \
-  --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/train_temporal.jsonl \
-  --model_name_or_path $CHECKPOINT_DIR \
-  --run_name $BACKBONE\_$EXP_NAME \
-  --output_dir $OUTPUT_DIR \
-  --overwrite_output_dir
+# # ==== TRAIN RETRIEVER ====
+# python src/tevatron/retriever/driver/train.py \
+#   --do_train \
+#   --pooling avg \
+#   --train_group_size 2 \
+#   --query_max_len 512 \
+#   --passage_max_len 512 \
+#   --per_device_train_batch_size 64 \
+#   --learning_rate 1e-4 \
+#   --temperature 1.0 \
+#   --logging_steps 100 \
+#   --num_train_epochs 5 \
+#   --attn_implementation sdpa \
+#   --dataset_name $DATA_ROOT_DIR/tevatron/Tevatron___msmarco-passage  \
+#   --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/train.jsonl \
+#   --model_name_or_path $CHECKPOINT_DIR \
+#   --run_name $BACKBONE\_$EXP_NAME \
+#   --output_dir $OUTPUT_DIR \
+#   --overwrite_output_dir
 
 # --dataset_path Modify inside the code
 # data_args.dataset_path = {
@@ -84,8 +80,7 @@ python /home/thuy0050/code/tevatron/louis/madaptor/train_tsretriever_with_tempor
 python src/tevatron/retriever/driver/encode.py \
   --per_device_eval_batch_size 512 \
   --passage_max_len 512 \
-  --pooling cls \
-  --bf16 \
+  --pooling avg \
   --normalize \
   --attn_implementation sdpa \
   --dataset_name LouisDo2108/temporal-nobel-prize \
@@ -98,14 +93,12 @@ python src/tevatron/retriever/driver/encode.py \
 python src/tevatron/retriever/driver/encode.py \
   --per_device_eval_batch_size 512 \
   --query_max_len 512 \
-  --pooling cls \
-  --bf16 \
+  --pooling avg \
   --normalize \
-  --encode_is_query \
   --attn_implementation sdpa \
+  --encode_is_query \
   --dataset_name LouisDo2108/temporal-nobel-prize \
   --dataset_config query \
-  --query_instruction "Represent this sentence for searching relevant passages: " \
   --model_name_or_path $OUTPUT_DIR \
   --encode_output_path $OUTPUT_DIR/queries_emb.pkl \
   --overwrite_output_dir
@@ -127,7 +120,7 @@ python -m tevatron.utils.format.convert_result_to_trec \
 
 # ==== EVALUATE RESULTS USING PYSERINI ====
 python -m pyserini.eval.trec_eval -c \
-  -mP.10 -mrecall.10 -mndcg_cut.10 -mrecip_rank -mmap \
+  -mP.10 -mrecall.10 -mndcg_cut.10 -M 10 -mrecip_rank -mmap \
   $DATA_ROOT_DIR/temporal/temporal_nobel_prize/test/qrel.txt \
   $OUTPUT_DIR/rank.trec
 
@@ -140,11 +133,3 @@ python -m tevatron.utils.format.convert_result_to_marco \
 python -m pyserini.eval.msmarco_passage_eval \
   $DATA_ROOT_DIR/temporal/temporal_nobel_prize/test/qrel.txt \
   $OUTPUT_DIR/rank.msmarco
-
-#  $OUTPUT_DIR \
-python louis/nanobeir_scripts/eval_nanobeir_with_sbert.py \
-    --model_name_or_path $CHECKPOINT_DIR \
-    --nanobeir_datasets NQ \
-    --query_prompts "Represent this sentence for searching relevant passages: " \
-    --pooling cls \
-    --bf16

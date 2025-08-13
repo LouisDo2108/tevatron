@@ -47,6 +47,7 @@ mkdir -p $OUTPUT_DIR
 # Scaled Dot Product Attention, for BERT
 # ==== ENCODE CORPUS ====
 python src/tevatron/retriever/driver/encode.py \
+  --bf16 \
   --tf32 \
   --per_device_eval_batch_size 512 \
   --passage_max_len 512 \
@@ -63,6 +64,7 @@ python src/tevatron/retriever/driver/encode.py \
 python src/tevatron/retriever/driver/encode.py \
   --per_device_eval_batch_size 512 \
   --query_max_len 512 \
+  --bf16 \
   --tf32 \
   --pooling avg \
   --normalize \

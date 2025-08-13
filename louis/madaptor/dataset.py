@@ -197,7 +197,7 @@ class SupervisedMAdaptorDataset(TrainDataset):
         return formatted_query, formatted_documents, corpus_documents
 
 
-class NaiveTemporalDataset(SupervisedMAdaptorDataset):
+class NaiveTemporalDataset(TrainDataset):
 
     def __init__(
         self,
@@ -238,15 +238,13 @@ class NaiveTemporalDataset(SupervisedMAdaptorDataset):
                 cache_dir=self.data_args.dataset_cache_dir,
                 num_proc=self.data_args.num_proc,
             )
-        self.query_instruction = self.data_args.query_instruction
 
     def __getitem__(self, item):
         group = self.train_data[item]
-
         epoch = int(self.trainer.state.epoch)
         _hashed_seed = hash(item + self.trainer.args.seed)
 
-        query_text = self.query_instruction + group["query"] # For model that has the query instruction like bge-base-en-v1.5
+        query_text = group['query']
         query_image = query_video = query_audio = None
         formatted_query = (
             self.data_args.query_prefix + query_text,
@@ -257,6 +255,7 @@ class NaiveTemporalDataset(SupervisedMAdaptorDataset):
 
         formatted_documents = []
         corpus_documents = []
+
         # Select positive document
         selected_positive = group["positive_passages"][
             (_hashed_seed + epoch) % len(group["positive_passages"])
@@ -364,7 +363,6 @@ class SentenceTransformerStyleNaiveTemporalDataset(SupervisedMAdaptorDataset):
                 cache_dir=self.data_args.dataset_cache_dir,
                 num_proc=self.data_args.num_proc,
             )
-        self.query_instruction = self.data_args.query_instruction
 
     def __getitem__(self, item):
         group = self.train_data[item]
@@ -372,9 +370,6 @@ class SentenceTransformerStyleNaiveTemporalDataset(SupervisedMAdaptorDataset):
         epoch = int(self.trainer.state.epoch)
         _hashed_seed = hash(item + self.trainer.args.seed)
 
-        query_text = (
-            self.query_instruction + group["query"]
-        )  # For model that has the query instruction like bge-base-en-v1.5
         formatted_query = self.data_args.query_prefix + query_text
 
         formatted_documents = []

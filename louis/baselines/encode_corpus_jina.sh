@@ -4,8 +4,8 @@
 #SBATCH --gres=gpu:A100:1
 #SBATCH --qos=fitq
 #SBATCH --job-name=thuy0050
-#SBATCH --output=/home/thuy0050/code/MixLoraDSI/logs/slurm-%x-%j.out
-#SBATCH --error=/home/thuy0050/code/MixLoraDSI/logs/slurm-%x-%j.err
+#SBATCH --output=/home/thuy0050/code/tevatron/louis/logs/slurm-%x-%j.out
+#SBATCH --error=/home/thuy0050/code/tevatron/louis/logs/slurm-%x-%j.err
 #SBATCH --time=1-00:00:00
 
 #SBATCH --nodes=1
@@ -47,7 +47,7 @@ mkdir -p $OUTPUT_DIR
 # Scaled Dot Product Attention, for BERT
 # ==== ENCODE CORPUS ====
 python src/tevatron/retriever/driver/encode.py \
-  --fp16 \
+  --bf16 \
   --tf32 \
   --per_device_eval_batch_size 512 \
   --passage_max_len 512 \
@@ -64,7 +64,7 @@ python src/tevatron/retriever/driver/encode.py \
 python src/tevatron/retriever/driver/encode.py \
   --per_device_eval_batch_size 512 \
   --query_max_len 512 \
-  --fp16 \
+  --bf16 \
   --tf32 \
   --pooling avg \
   --normalize \

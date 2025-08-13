@@ -33,29 +33,25 @@ cd /home/thuy0050/code/tevatron
 
 DATA_ROOT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/data/third_work
 OUTPUT_DIR_ROOT=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron
-
 DATA_NAME=temporal_nobel_prize
-MODEL_NAME=bge-base-en-v1.5
-BACKBONE=bge-base-en-v1.5
-EXP_NAME=bge-base-en-v1.5
+MODEL_NAME=ts-retriever
+BACKBONE=contriever
+EXP_NAME=provided_checkpoint_ts-retriever
 OUTPUT_DIR=$OUTPUT_DIR_ROOT/$DATA_NAME/$MODEL_NAME/$BACKBONE/$EXP_NAME
+CHECKPOINT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron/temporal_nobel_prize/ts-retriever/tscontriever/original-ts-retriever/models/Tscontriever
 
-CHECKPOINT_DIR=BAAI/bge-base-en-v1.5
+# /home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron/temporal_temporal_nobel_prize/ts-retriever/reproduced_with_provided_checkpoint_ts-retriever
 
-export WANDB_ENTITY=htluc19
-export WANDB_PROJECT=temporal
-
-mkdir -p $OUTPUT_DIR # Create folder if not exists
-
-# negative_size = self.data_args.train_group_size - 1
+mkdir -p $OUTPUT_DIR
 
 # Scaled Dot Product Attention, for BERT
 # ==== ENCODE CORPUS ====
 python src/tevatron/retriever/driver/encode.py \
+  --bf16 \
+  --tf32 \
   --per_device_eval_batch_size 512 \
   --passage_max_len 512 \
-  --pooling cls \
-  --bf16 \
+  --pooling avg \
   --normalize \
   --attn_implementation sdpa \
   --dataset_name LouisDo2108/temporal-nobel-prize \
@@ -68,14 +64,14 @@ python src/tevatron/retriever/driver/encode.py \
 python src/tevatron/retriever/driver/encode.py \
   --per_device_eval_batch_size 512 \
   --query_max_len 512 \
-  --pooling cls \
   --bf16 \
+  --tf32 \
+  --pooling avg \
   --normalize \
-  --encode_is_query \
   --attn_implementation sdpa \
+  --encode_is_query \
   --dataset_name LouisDo2108/temporal-nobel-prize \
   --dataset_config query \
-  --query_instruction "Represent this sentence for searching relevant passages: " \
   --model_name_or_path $CHECKPOINT_DIR \
   --encode_output_path $OUTPUT_DIR/queries_emb.pkl \
   --overwrite_output_dir
@@ -110,11 +106,3 @@ python -m tevatron.utils.format.convert_result_to_marco \
 python -m pyserini.eval.msmarco_passage_eval \
   $DATA_ROOT_DIR/temporal/temporal_nobel_prize/test/qrel.txt \
   $OUTPUT_DIR/rank.msmarco
-
-#  $OUTPUT_DIR \
-python louis/nanobeir_scripts/eval_nanobeir_with_sbert.py \
-    --model_name_or_path $CHECKPOINT_DIR \
-    --nanobeir_datasets NQ \
-    --query_prompts "Represent this sentence for searching relevant passages: " \
-    --pooling cls \
-    --bf16

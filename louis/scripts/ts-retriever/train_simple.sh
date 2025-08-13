@@ -34,13 +34,13 @@ cd /home/thuy0050/code/tevatron
 DATA_ROOT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/data/third_work
 OUTPUT_DIR_ROOT=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron
 
-DATA_NAME=temporal_nobel_prize
+DATA_NAME=ChroniclingAmericaQA
 MODEL_NAME=ts-retriever
-BACKBONE=contriever
-EXP_NAME=naive_temporal_v3_5epoch_temp0.05_lora_bf16
+BACKBONE=bge-base-en-v1.5
+EXP_NAME=baseline
 OUTPUT_DIR=$OUTPUT_DIR_ROOT/$DATA_NAME/$MODEL_NAME/$BACKBONE/$EXP_NAME
 
-CHECKPOINT_DIR=facebook/contriever
+CHECKPOINT_DIR=BAAI/bge-base-en-v1.5
 
 export WANDB_ENTITY=htluc19
 export WANDB_PROJECT=temporal
@@ -49,47 +49,50 @@ mkdir -p $OUTPUT_DIR # Create folder if not exists
 
 # negative_size = self.data_args.train_group_size - 1
 # lora target modules for contriever: query,key,value,dense,word_embeddings,position_embeddings
+# ==== TRAIN RETRIEVER ====
+# --num_train_epochs 10 \
+python src/tevatron/retriever/driver/train.py \
+  --do_train \
+  --pooling cls \
+  --bf16 \
+  --normalize \
+  --train_group_size 5 \
+  --query_max_len 512 \
+  --passage_max_len 512 \
+  --per_device_train_batch_size 64 \
+  --learning_rate 1e-4 \
+  --temperature 0.02 \
+  --logging_steps 100 \
+  --attn_implementation sdpa \
+  --num_train_epochs 5 \
+  --lora \
+  --lora_r 4 \
+  --lora_alpha 16 \
+  --lora_target_modules layer.11.intermediate.dense,layer.11.output.dense \
+  --passage_prefix "Represent this sentence for searching relevant passages: " \
+  --dataset_name $DATA_ROOT_DIR/tevatron/Tevatron___msmarco-passage  \
+  --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/train_temporal_v2.jsonl \
+  --eval_dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/dev.jsonl \
+  --model_name_or_path $CHECKPOINT_DIR \
+  --run_name $BACKBONE\_$EXP_NAME \
+  --output_dir $OUTPUT_DIR \
+  --overwrite_output_dir \
+  --report_to none
+  # --normalize \
+  # --filter_false_negatives
 
-# # ==== TRAIN RETRIEVER ====
-# python louis/madaptor/train_tsretriever_with_temporal_v3.py \
-#   --do_train \
-#   --pooling avg \
-#   --bf16 \
-#   --train_group_size 8 \
-#   --query_max_len 512 \
-#   --passage_max_len 512 \
-#   --per_device_train_batch_size 64 \
-#   --learning_rate 1e-4 \
-#   --temperature 0.05 \
-#   --logging_steps 100 \
-#   --attn_implementation sdpa \
-#   --num_train_epochs 5 \
-#   --lora \
-#   --lora_r 4 \
-#   --lora_alpha 16 \
-#   --lora_target_modules query,key,value,dense \
-#   --modules_to_save temporal_projector \
-#   --dataset_name $DATA_ROOT_DIR/tevatron/Tevatron___msmarco-passage  \
-#   --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/train_temporal_v2.jsonl \
-#   --eval_dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/dev.jsonl \
-#   --model_name_or_path $CHECKPOINT_DIR \
-#   --run_name $BACKBONE\_$EXP_NAME \
-#   --output_dir $OUTPUT_DIR \
-#   --overwrite_output_dir \
-#   --report_to none
+# # --num_train_epochs 5 \
 
-# --dataset_path Modify inside the code
-# data_args.dataset_path = {
-#     "train": "$DATA_ROOT_DIR/temporal/nobel_prize/train/train.jsonl",
-#     "dev": "$DATA_ROOT_DIR/temporal/nobel_prize/train/dev.jsonl",
-# }
+# # layer.11.intermediate.dense,layer.11.output.dense \
+# # layer.11.intermediate.dense,layer.11.output.dense \
+# layer.11.attention.self.query,layer.11.attention.self.key,layer.11.attention.self.value,
 
 # Scaled Dot Product Attention, for BERT
 # ==== ENCODE CORPUS ====
 python src/tevatron/retriever/driver/encode.py \
   --per_device_eval_batch_size 512 \
   --passage_max_len 512 \
-  --pooling avg \
+  --pooling cls \
   --bf16 \
   --normalize \
   --attn_implementation sdpa \
@@ -100,16 +103,16 @@ python src/tevatron/retriever/driver/encode.py \
   --lora_name_or_path $OUTPUT_DIR \
   --overwrite_output_dir
 
-
 # ==== ENCODE QUERIES ==== 
 python src/tevatron/retriever/driver/encode.py \
   --per_device_eval_batch_size 512 \
   --query_max_len 512 \
-  --pooling avg \
+  --pooling cls \
   --bf16 \
   --normalize \
   --attn_implementation sdpa \
   --encode_is_query \
+  --query_prefix "Represent this sentence for searching relevant passages: " \
   --dataset_name LouisDo2108/temporal-nobel-prize \
   --dataset_config query \
   --model_name_or_path $OUTPUT_DIR \
@@ -133,8 +136,9 @@ python -m tevatron.utils.format.convert_result_to_trec \
     --remove_query
 
 # ==== EVALUATE RESULTS USING PYSERINI ====
+# Note that the M here will set the @k (i.e., @M) of mrr and map, by default, if not set, M=100
 python -m pyserini.eval.trec_eval -c \
-  -mP.10 -mrecall.5 -mrecall.10 -mrecall.20 -mndcg_cut.5 -mndcg_cut.10 -mndcg_cut.20 -mrecip_rank -mmap \
+  -mP.10 -mrecall.10 -mndcg_cut.10 -M 10 -mrecip_rank -mmap \
   $DATA_ROOT_DIR/temporal/temporal_nobel_prize/test/qrel.txt \
   $OUTPUT_DIR/rank.trec
 
@@ -148,8 +152,9 @@ python -m pyserini.eval.msmarco_passage_eval \
   $DATA_ROOT_DIR/temporal/temporal_nobel_prize/test/qrel.txt \
   $OUTPUT_DIR/rank.msmarco
 
-python louis/nanobeir_scripts/eval_nanobeir_with_sbert.py \
-    --model_name_or_path $OUTPUT_DIR \
-    --nanobeir_datasets NQ \
-    --pooling mean \
-    --bf16
+python louis/beir_scripts/eval_nanobeir_with_sbert.py \
+  --model_name_or_path $OUTPUT_DIR \
+  --nanobeir_datasets NQ \
+    --query_prompts "Represent this sentence for searching relevant passages: " \
+    --pooling cls \
+  --bf16

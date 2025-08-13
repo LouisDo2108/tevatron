@@ -34,13 +34,13 @@ cd /home/thuy0050/code/tevatron
 DATA_ROOT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/data/third_work
 OUTPUT_DIR_ROOT=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron
 
-DATA_NAME=temporal_nobel_prize
+DATA_NAME=ChroniclingAmericaQA
 MODEL_NAME=ts-retriever
-BACKBONE=bge-base-en-v1.5
-EXP_NAME=naive_temporal_v3_5epoch_temp0.05_lora_bf16_dev
+BACKBONE=contriever
+EXP_NAME=ts-retriever_5epoch_temp0.05_lora_bf16
 OUTPUT_DIR=$OUTPUT_DIR_ROOT/$DATA_NAME/$MODEL_NAME/$BACKBONE/$EXP_NAME
 
-CHECKPOINT_DIR=BAAI/bge-base-en-v1.5
+CHECKPOINT_DIR=facebook/contriever
 
 export WANDB_ENTITY=htluc19
 export WANDB_PROJECT=temporal
@@ -48,40 +48,33 @@ export WANDB_PROJECT=temporal
 mkdir -p $OUTPUT_DIR # Create folder if not exists
 
 # negative_size = self.data_args.train_group_size - 1
-
-
-# Jina v2 already calculates cosine similarity during training
+# lora target modules for contriever: query,key,value,dense,word_embeddings,position_embeddings
 # ==== TRAIN RETRIEVER ====
-python louis/madaptor/train_tsretriever_with_temporal_v3.py \
+# --num_train_epochs 10 \
+python src/tevatron/retriever/driver/train.py \
   --do_train \
-  --pooling cls \
+  --pooling avg \
   --bf16 \
-  --normalize \
   --train_group_size 2 \
   --query_max_len 512 \
   --passage_max_len 512 \
   --per_device_train_batch_size 64 \
   --learning_rate 1e-4 \
-  --temperature 0.02 \
+  --temperature 0.05 \
   --logging_steps 100 \
-  --attn_implementation sdpa \
-  --num_train_epochs 5 \
+  --max_steps 10 \
   --lora \
   --lora_r 4 \
   --lora_alpha 16 \
-  --lora_target_modules layer.11.intermediate.dense,layer.11.output.dense \
-  --modules_to_save temporal_projector \
-  --query_instruction "Represent this sentence for searching relevant passages: " \
+  --lora_target_modules all-linear \
+  --attn_implementation sdpa \
   --dataset_name $DATA_ROOT_DIR/tevatron/Tevatron___msmarco-passage  \
-  --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/train_temporal_v2.jsonl \
-  --eval_dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/dev.jsonl \
+  --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/processed/train.jsonl \
   --model_name_or_path $CHECKPOINT_DIR \
   --run_name $BACKBONE\_$EXP_NAME \
   --output_dir $OUTPUT_DIR \
-  --overwrite_output_dir
-
-# --num_train_epochs 5 \
-# layer.11.intermediate.dense,layer.11.output.dense \
+  --overwrite_output_dir \
+  --report_to none
 
 # --dataset_path Modify inside the code
 # data_args.dataset_path = {
@@ -94,7 +87,7 @@ python louis/madaptor/train_tsretriever_with_temporal_v3.py \
 # python src/tevatron/retriever/driver/encode.py \
 #   --per_device_eval_batch_size 512 \
 #   --passage_max_len 512 \
-#   --pooling cls \
+#   --pooling avg \
 #   --bf16 \
 #   --normalize \
 #   --attn_implementation sdpa \
@@ -109,12 +102,11 @@ python louis/madaptor/train_tsretriever_with_temporal_v3.py \
 # python src/tevatron/retriever/driver/encode.py \
 #   --per_device_eval_batch_size 512 \
 #   --query_max_len 512 \
-#   --pooling cls \
+#   --pooling avg \
 #   --bf16 \
 #   --normalize \
 #   --attn_implementation sdpa \
 #   --encode_is_query \
-#   --query_instruction "Represent this sentence for searching relevant passages: " \
 #   --dataset_name LouisDo2108/temporal-nobel-prize \
 #   --dataset_config query \
 #   --model_name_or_path $OUTPUT_DIR \
@@ -154,8 +146,7 @@ python louis/madaptor/train_tsretriever_with_temporal_v3.py \
 #   $OUTPUT_DIR/rank.msmarco
 
 # python louis/nanobeir_scripts/eval_nanobeir_with_sbert.py \
-#     --model_name_or_path $OUTPUT_DIR \
-#     --nanobeir_datasets NQ \
-#     --query_prompts "Represent this sentence for searching relevant passages: " \
-#     --pooling cls \
-#     --bf16
+#   --model_name_or_path $OUTPUT_DIR \
+#   --nanobeir_datasets NQ \
+#   --pooling avg \
+#   --bf16

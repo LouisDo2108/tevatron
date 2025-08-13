@@ -15,6 +15,8 @@ from transformers.file_utils import ModelOutput
 from tevatron.retriever.arguments import ModelArguments
 from tevatron.retriever.arguments import TevatronTrainingArguments as TrainingArguments
 
+from pdb import set_trace as st 
+
 logger = logging.getLogger(__name__)
 
 
@@ -34,6 +36,8 @@ class EncoderModel(nn.Module):
                  pooling: str = 'cls',
                  normalize: bool = False,
                  temperature: float = 1.0,
+                 training_args: TrainingArguments = None,
+                 base_model: PreTrainedModel = None,
                  ):
         super().__init__()
         self.config = encoder.config
@@ -44,9 +48,15 @@ class EncoderModel(nn.Module):
         self.cross_entropy = nn.CrossEntropyLoss(reduction='mean')
         self.is_ddp = dist.is_initialized()
         self._keys_to_ignore_on_save = None
+        self.training_args = training_args
         if self.is_ddp:
             self.process_rank = dist.get_rank()
             self.world_size = dist.get_world_size()
+            
+        self.base_model = base_model
+        if self.base_model is not None:
+            for name, param in self.base_model.named_parameters():
+                param.requires_grad = False
 
     def forward(self, query: Dict[str, Tensor] = None, passage: Dict[str, Tensor] = None):
         q_reps = self.encode_query(query) if query else None
@@ -140,6 +150,11 @@ class EncoderModel(nn.Module):
                 **hf_kwargs
             )
             print(f"Fall back to use {hf_kwargs['attn_implementation']}")
+            
+        if train_args.kl_loss:
+            kl_loss_base_model = deepcopy(base_model)
+        else:
+            kl_loss_base_model = None
 
         if base_model.config.pad_token_id is None:
             base_model.config.pad_token_id = 0
@@ -171,20 +186,24 @@ class EncoderModel(nn.Module):
                 lora_model, dtype=torch.float16 if train_args.fp16 else torch.bfloat16 if train_args.bf16 else torch.float32
             )
 
-            print(lora_model.get_layer_status())
-            print(lora_model.get_model_status())
+            # print(lora_model.get_layer_status())
+            # print(lora_model.get_model_status())
+            
             model = cls(
                 encoder=lora_model,
                 pooling=model_args.pooling,
                 normalize=model_args.normalize,
-                temperature=model_args.temperature
+                temperature=model_args.temperature,
+                training_args=train_args,
+                base_model=kl_loss_base_model if train_args.kl_loss else None
             )
         else:
             model = cls(
                 encoder=base_model,
                 pooling=model_args.pooling,
                 normalize=model_args.normalize,
-                temperature=model_args.temperature
+                temperature=model_args.temperature,
+                training_args=train_args,
             )
         return model
 

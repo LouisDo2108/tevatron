@@ -156,6 +156,13 @@ class MAdaptorTrainer(TevatronTrainer):
 
         if state_dict is None:
             state_dict = self.model.state_dict()
+            
+            # Remove the base_model which is only used for KL loss
+            model_state_dict = {
+                k: v for k, v in state_dict.items() if k.startswith("base_model.")
+            }
+            
+            # Remove the encoder of Tevatron's DenseModel wrapper.
             prefix = "encoder."
             model_state_dict = {k[len(prefix) :]: v for k, v in state_dict.items() if k.startswith(prefix)}
 
@@ -164,7 +171,6 @@ class MAdaptorTrainer(TevatronTrainer):
             # safetensors.torch.save_file(
             #     adapter_state_dict, os.path.join(output_dir, "adaptor.safetensors")
             # )
-
             self.model.encoder.save_pretrained(
                 output_dir,
                 state_dict=model_state_dict,

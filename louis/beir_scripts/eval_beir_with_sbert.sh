@@ -41,5 +41,4 @@ EXP_NAME=naive_temporal_v2_5epoch_temp0.05_lora_bf16_with_temporal_projector
 OUTPUT_DIR=$OUTPUT_DIR_ROOT/$DATA_NAME/$MODEL_NAME/$BACKBONE/$EXP_NAME
 MODEL_DIR=$OUTPUT_DIR_ROOT/temporal_nobel_prize/$MODEL_NAME/$BACKBONE/$EXP_NAME
 
-python nanobeir_scripts/eval_nanobeir_with_sbert.py \
-  --
+python nanobeir_scripts/eval_nanobeir_with_sbert.py
