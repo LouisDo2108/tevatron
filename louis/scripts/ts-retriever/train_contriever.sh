@@ -91,6 +91,7 @@ python src/tevatron/retriever/driver/encode.py \
   --model_name_or_path $OUTPUT_DIR \
   --overwrite_output_dir
 
+
 # ==== ENCODE QUERIES ==== 
 python src/tevatron/retriever/driver/encode.py \
   --per_device_eval_batch_size 512 \
@@ -122,17 +123,24 @@ python -m tevatron.utils.format.convert_result_to_trec \
     --remove_query
 
 # ==== EVALUATE RESULTS USING PYSERINI ====
+# Note that the M here will set the @k (i.e., @M) of mrr and map, by default, if not set, M=100
 python -m pyserini.eval.trec_eval -c \
-  -mP.10 -mrecall.10 -mndcg_cut.10 -mrecip_rank -mmap \
+  -mP.10 -mrecall.10 -mndcg_cut.10 -M 10 -mrecip_rank -mmap \
   $DATA_ROOT_DIR/temporal/temporal_nobel_prize/test/qrel.txt \
   $OUTPUT_DIR/rank.trec
 
-# ==== CONVERT TO MSMARCO FORMAT ====  
-python -m tevatron.utils.format.convert_result_to_marco \
-    --input $OUTPUT_DIR/rank.txt \
-    --output $OUTPUT_DIR/rank.msmarco \
+# # ==== CONVERT TO MSMARCO FORMAT ====  
+# python -m tevatron.utils.format.convert_result_to_marco \
+#     --input $OUTPUT_DIR/rank.txt \
+#     --output $OUTPUT_DIR/rank.msmarco \
 
-# Calculate MRR@k with Pyserini's MSMARCO script
-python -m pyserini.eval.msmarco_passage_eval \
-  $DATA_ROOT_DIR/temporal/temporal_nobel_prize/test/qrel.txt \
-  $OUTPUT_DIR/rank.msmarco
+# # Calculate MRR@k with Pyserini's MSMARCO script
+# python -m pyserini.eval.msmarco_passage_eval \
+#   $DATA_ROOT_DIR/temporal/temporal_nobel_prize/test/qrel.txt \
+#   $OUTPUT_DIR/rank.msmarco
+
+python louis/beir_scripts/eval_nanobeir_with_sbert.py \
+  --model_name_or_path $OUTPUT_DIR \
+  --nanobeir_datasets NQ \
+  --pooling avg \
+  --bf16

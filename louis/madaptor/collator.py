@@ -196,22 +196,20 @@ class SupervisedMAdaptorCollator(TrainCollator):
 
 
 @dataclass
-class NaiveTemporalCollator(TrainCollator):
+class TemporalAsSentenceCollator(TrainCollator):
     """
     A naive collator that consider the temporal expressions from the text as sentences.
+    IMPORTANT: THE TEMPORAL NOBEL PRIZE DATASET USES QUERIES WITH DIFFERENT TEMPORAL EXPRESSIONS AS POSIVITE/NEGATIVE PASSAGES, AND THE RELEVANT PASSAGE AS QUERY. SINCE IT IS EASIER TO CONSTRUCT POSITIVE/NEGATIVE PAIRS THIS WAY.
     """
 
     def __call__(self, features):
-        """
-        Collate function for training.
-        :param features: list of (query, passages) tuples
-        :return: tokenized query_ids, passage_ids
-        """
         all_queries = [f[0] for f in features]
         all_passages = []
         for f in features:
             all_passages.extend(f[1])
 
+        """
+        Previously used for chunked documents
         # all_corpus_docid = []
         # all_corpus_chunkid = []
         # all_corpus = []
@@ -221,6 +219,7 @@ class NaiveTemporalCollator(TrainCollator):
         #         all_corpus_docid.append(chunkid)
         #         all_corpus_chunkid.append(docid)
         #         all_corpus.append(doc)
+        """
 
         all_queries = [q[0] for q in all_queries]
 
@@ -279,17 +278,12 @@ class NaiveTemporalCollator(TrainCollator):
 
 
 @dataclass
-class NaiveTemporalv2Collator(TrainCollator):
+class ExtractedTemporalCollator(TrainCollator):
     """
     An improved collator based on NaiveTemporalCollator. It nows extract the temporal expressions span in the queries.
     """
 
     def __call__(self, features):
-        """
-        Collate function for training.
-        :param features: list of (query, passages) tuples
-        :return: tokenized query_ids, passage_ids
-        """
         all_queries = [f[0] for f in features]
         all_queries = [q[0] for q in all_queries]
         all_passages = []
@@ -306,7 +300,8 @@ class NaiveTemporalv2Collator(TrainCollator):
                 all_passages.append(passage)
                 curr_spans = []
                 for t in passage_temporal:
-                    start = passage.find(t)
+                    # The assumption is that the temporal expressions can be located immediately from the first matching, this might not be the case for more complex queries/passages
+                    start = passage.find(t) 
                     if start != -1:
                         curr_spans.append((start, start + len(t)))
                 char_spans.extend(curr_spans)
@@ -375,7 +370,7 @@ class NaiveTemporalv2Collator(TrainCollator):
 
 
 @dataclass
-class NaiveTemporalv3Collator(TrainCollator):
+class ExtractedTemporalWithReconstructionCollator(TrainCollator):
     """
     An improved collator based on NaiveTemporalv2Collator. It also returns the input_ids of the temporal expressions for temporal reconstruction.
     """
@@ -492,6 +487,7 @@ class NaiveTemporalv3Collator(TrainCollator):
             temporal_token_spans, # Spans for extracting the corresponding temporal tokens
             temporal_tokens_input_ids, # Labels for reconstruction loss
         )
+
 
 # @dataclass
 # class SentenceTransformerStyleTemporalCollator(NaiveTemporalv2Collator):

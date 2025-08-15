@@ -37,7 +37,7 @@ OUTPUT_DIR_ROOT=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron
 DATA_NAME=temporal_nobel_prize
 MODEL_NAME=ts-retriever
 BACKBONE=contriever
-EXP_NAME=v3_qt_bs64_neg4
+EXP_NAME=dev # provided_checkpoint_ts-retriever
 OUTPUT_DIR=$OUTPUT_DIR_ROOT/$DATA_NAME/$MODEL_NAME/$BACKBONE/$EXP_NAME
 
 CHECKPOINT_DIR=facebook/contriever
@@ -51,19 +51,17 @@ mkdir -p $OUTPUT_DIR # Create folder if not exists
 # lora target modules for contriever: query,key,value,dense,word_embeddings,position_embeddings
 
 # ==== TRAIN RETRIEVER ====
-python louis/madaptor/train_tsretriever_with_temporal_v3.py \
+python louis/madaptor/train_temporal.py \
   --do_train \
   --pooling avg \
   --bf16 \
-  --train_group_size 5 \
-  --query_max_len 512 \
-  --passage_max_len 512 \
+  --train_group_size 2 \
   --per_device_train_batch_size 64 \
   --learning_rate 1e-4 \
   --temperature 0.05 \
-  --logging_steps 100 \
-  --attn_implementation sdpa \
+  --logging_steps 10 \
   --num_train_epochs 5 \
+  --gradient_accumulation_steps 1 \
   --lora \
   --lora_r 4 \
   --lora_alpha 16 \
@@ -75,8 +73,13 @@ python louis/madaptor/train_tsretriever_with_temporal_v3.py \
   --model_name_or_path $CHECKPOINT_DIR \
   --run_name $BACKBONE\_$EXP_NAME \
   --output_dir $OUTPUT_DIR \
-  --overwrite_output_dir \
-  --report_to none
+  --report_to none \
+  --matryoshka \
+  --kl_loss \
+  --truncated_normalize \
+  --filter_false_negatives \
+  --temporal \
+  --temporal_reconstruction
 
 # --dataset_path Modify inside the code
 # data_args.dataset_path = {
@@ -150,7 +153,7 @@ python -m pyserini.eval.trec_eval -c \
 #   $OUTPUT_DIR/rank.msmarco
 
 python louis/beir_scripts/eval_nanobeir_with_sbert.py \
-    --model_name_or_path $OUTPUT_DIR \
+    --model_name_or_path $CHECKPOINT_DIR \
     --nanobeir_datasets NQ \
     --pooling mean \
     --bf16

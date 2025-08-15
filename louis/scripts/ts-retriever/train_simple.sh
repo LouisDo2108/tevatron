@@ -50,7 +50,6 @@ mkdir -p $OUTPUT_DIR # Create folder if not exists
 # negative_size = self.data_args.train_group_size - 1
 # lora target modules for contriever: query,key,value,dense,word_embeddings,position_embeddings
 # ==== TRAIN RETRIEVER ====
-# --num_train_epochs 10 \
 python src/tevatron/retriever/driver/train.py \
   --do_train \
   --pooling cls \
@@ -142,19 +141,19 @@ python -m pyserini.eval.trec_eval -c \
   $DATA_ROOT_DIR/temporal/temporal_nobel_prize/test/qrel.txt \
   $OUTPUT_DIR/rank.trec
 
-# ==== CONVERT TO MSMARCO FORMAT ====  
-python -m tevatron.utils.format.convert_result_to_marco \
-    --input $OUTPUT_DIR/rank.txt \
-    --output $OUTPUT_DIR/rank.msmarco \
+# # ==== CONVERT TO MSMARCO FORMAT ====  
+# python -m tevatron.utils.format.convert_result_to_marco \
+#     --input $OUTPUT_DIR/rank.txt \
+#     --output $OUTPUT_DIR/rank.msmarco \
 
-# Calculate MRR@k with Pyserini's MSMARCO script
-python -m pyserini.eval.msmarco_passage_eval \
-  $DATA_ROOT_DIR/temporal/temporal_nobel_prize/test/qrel.txt \
-  $OUTPUT_DIR/rank.msmarco
+# # Calculate MRR@k with Pyserini's MSMARCO script
+# python -m pyserini.eval.msmarco_passage_eval \
+#   $DATA_ROOT_DIR/temporal/temporal_nobel_prize/test/qrel.txt \
+#   $OUTPUT_DIR/rank.msmarco
 
 python louis/beir_scripts/eval_nanobeir_with_sbert.py \
   --model_name_or_path $OUTPUT_DIR \
   --nanobeir_datasets NQ \
-    --query_prompts "Represent this sentence for searching relevant passages: " \
-    --pooling cls \
+  --query_prompts "Represent this sentence for searching relevant passages: " \
+  --pooling cls \
   --bf16

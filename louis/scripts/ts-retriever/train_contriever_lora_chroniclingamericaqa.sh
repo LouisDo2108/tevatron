@@ -12,7 +12,7 @@
 #SBATCH --ntasks=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=256G
+#SBATCH --mem=512G
 
 #SBATCH --mail-user=tuan.huynh1@monash.edu
 #SBATCH --mail-type=BEGIN,END,FAIL
@@ -75,13 +75,6 @@ python src/tevatron/retriever/driver/train.py \
   --overwrite_output_dir \
   --report_to none
 
-  --num_train_epochs 10 \
-
---dataset_path Modify inside the code
-data_args.dataset_path = {
-    "train": "$DATA_ROOT_DIR/temporal/nobel_prize/train/train.jsonl",
-    "dev": "$DATA_ROOT_DIR/temporal/nobel_prize/train/dev.jsonl",
-}
 
 # Scaled Dot Product Attention, for BERT
 # ==== ENCODE CORPUS ====
@@ -132,19 +125,19 @@ python -m tevatron.utils.format.convert_result_to_trec \
 
 # ==== EVALUATE RESULTS USING PYSERINI ====
 python -m pyserini.eval.trec_eval -c \
-  -mP.10 -mrecall.10 -mndcg_cut.10 -mrecip_rank -mmap \
+  -mP.10 -mrecall.10 -mndcg_cut.10 -M 10 -mrecip_rank -mmap \
   $DATA_ROOT_DIR/temporal/ChroniclingAmericaQA/processed/qrel.txt \
   $OUTPUT_DIR/rank.trec
 
-# ==== CONVERT TO MSMARCO FORMAT ====  
-python -m tevatron.utils.format.convert_result_to_marco \
-    --input $OUTPUT_DIR/rank.txt \
-    --output $OUTPUT_DIR/rank.msmarco \
+# # ==== CONVERT TO MSMARCO FORMAT ====  
+# python -m tevatron.utils.format.convert_result_to_marco \
+#     --input $OUTPUT_DIR/rank.txt \
+#     --output $OUTPUT_DIR/rank.msmarco \
 
-# Calculate MRR@k with Pyserini's MSMARCO script
-python -m pyserini.eval.msmarco_passage_eval \
-  $DATA_ROOT_DIR/temporal/ChroniclingAmericaQA/processed/qrel.txt \
-  $OUTPUT_DIR/rank.msmarco
+# # Calculate MRR@k with Pyserini's MSMARCO script
+# python -m pyserini.eval.msmarco_passage_eval \
+#   $DATA_ROOT_DIR/temporal/temporal_nobel_prize/test/qrel.txt \
+#   $OUTPUT_DIR/rank.msmarco
 
 python louis/beir_scripts/eval_nanobeir_with_sbert.py \
   --model_name_or_path $OUTPUT_DIR \

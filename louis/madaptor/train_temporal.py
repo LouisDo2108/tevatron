@@ -10,18 +10,48 @@ from utils import init, write_json, get_params_info
 import torch
 from transformers import AutoTokenizer
 
-from madaptor import NaiveTemporalv3 as Model
+from tevatron.retriever.modeling import DenseModel
+from madaptor import NaiveTemporal, NaiveTemporalProjector, NaiveTemporalProjectorReconstruction
 from dataset import NaiveTemporalDataset as TrainDataset
-from tevatron.retriever.dataset import TrainDataset as EvalDataset
-from collator import NaiveTemporalv2Collator as TrainCollator
+from tevatron.retriever.collator import TrainCollator as TevatronCollator
+from collator import TemporalAsSentenceCollator, ExtractedTemporalCollator, ExtractedTemporalWithReconstructionCollator
 from trainer import MAdaptorTrainer as Trainer
 
 from tevatron.retriever.gc_trainer import GradCacheTrainer as GCTrainer
 
+logger = logging.getLogger(__name__)
+
+
+collator_dict = {
+    "tevatron_standard": TevatronCollator,
+    "temporal_as_sentence": TemporalAsSentenceCollator,
+    "extracted_temporal": ExtractedTemporalCollator,
+    "extracted_temporal_with_reconstruction": ExtractedTemporalWithReconstructionCollator,
+}
+
+def select_collators_and_models(model_args, data_args, training_args):
+    
+    # Check if this is normal TS-Retriever style training
+    if not training_args.matryoshka:
+        return collator_dict["tevatron_standard"], DenseModel
+    
+    if training_args.temporal:
+        if training_args.temporal_as_sentence:
+            return collator_dict["temporal_as_sentence"], NaiveTemporal
+        if training_args.extracted_temporal:
+            return collator_dict["extracted_temporal"], NaiveTemporalProjector
+        if training_args.temporal_reconstruction:
+            return collator_dict["extracted_temporal_with_reconstruction"], NaiveTemporalProjectorReconstruction
+    else:
+        # Only semantic matryoshka
+        return collator_dict["tevatron_standard"], NaiveTemporal
+
 
 def main():
     model_args, data_args, training_args = init()
-
+    
+    TrainCollator, Model = select_collators_and_models(model_args, data_args, training_args)
+    
     tokenizer = AutoTokenizer.from_pretrained(
         (
             model_args.tokenizer_name
@@ -39,56 +69,28 @@ def main():
     else:
         tokenizer.padding_side = "left"
 
-    if training_args.bf16:
-        torch_dtype = torch.bfloat16
-        print(f"Training in bf16")
-    elif training_args.fp16:
-        torch_dtype = torch.float16
-        print(f"Training in fp16")
-    else:
-        torch_dtype = torch.float32
-        print(f"Training in fp32")
-
     model = Model.build(
         model_args,
         training_args,
         cache_dir=model_args.cache_dir,
-        # torch_dtype=torch_dtype,
         attn_implementation=model_args.attn_implementation,
     )
 
     train_dataset = TrainDataset(data_args)
-
-    eval_data_args = deepcopy(data_args)
-    eval_data_args.dataset_path = data_args.eval_dataset_path
-
-    eval_dataset = EvalDataset(eval_data_args)
     collator = TrainCollator(data_args, tokenizer)
+    
+    logger.info(f"Using {TrainCollator} collator and {Model} model")
 
     trainer_cls = GCTrainer if training_args.grad_cache else Trainer
     trainer = trainer_cls(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
-        eval_dataset=eval_dataset,
         data_collator=collator,
     )
     train_dataset.set_trainer(trainer)
-    eval_dataset.set_trainer(trainer)
 
     last_checkpoint = None
-    # if os.path.isdir(training_args.output_dir):
-    #     last_checkpoint = get_last_checkpoint(training_args.output_dir)
-
-    # if last_checkpoint:
-    #     model = model.load(
-    #         model_args.model_name_or_path,
-    #         pooling=model_args.pooling,
-    #         normalize=model_args.normalize,
-    #         lora_name_or_path=model_args.lora_name_or_path,
-    #         cache_dir=model_args.cache_dir,
-    #         attn_implementation=model_args.attn_implementation,
-    #     )
     get_params_info(model)
     trainer.train(resume_from_checkpoint=(last_checkpoint is not None))
     if wandb.run is not None:

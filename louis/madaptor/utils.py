@@ -119,12 +119,3 @@ def init():
     set_seed(training_args.seed)
 
     return model_args, data_args, training_args
-{
-    "loss": 5.5,
-    "loss_temporal_512": 3.8627,
-    "loss_semantic_512": 0.8854,
-    "loss_semantic_768": 0.752,
-    "grad_norm": 6.2599,
-    "learning_rate": "7.407e-06",
-    "epoch": 0.24,
-}

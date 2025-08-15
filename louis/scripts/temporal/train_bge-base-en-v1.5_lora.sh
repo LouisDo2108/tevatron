@@ -49,19 +49,16 @@ mkdir -p $OUTPUT_DIR # Create folder if not exists
 
 # # negative_size = self.data_args.train_group_size - 1
 # ==== TRAIN RETRIEVER ====
-python louis/madaptor/train_tsretriever_with_temporal_v4.py \
+python louis/madaptor/train_temporal.py \
   --do_train \
   --pooling cls \
   --bf16 \
   --normalize \
   --train_group_size 2 \
-  --query_max_len 512 \
-  --passage_max_len 512 \
-  --per_device_train_batch_size 128 \
+  --per_device_train_batch_size 64 \
   --learning_rate 1e-4 \
   --temperature 0.02 \
   --logging_steps 10 \
-  --attn_implementation sdpa \
   --num_train_epochs 5 \
   --gradient_accumulation_steps 4 \
   --lora \
@@ -76,7 +73,6 @@ python louis/madaptor/train_tsretriever_with_temporal_v4.py \
   --model_name_or_path $CHECKPOINT_DIR \
   --run_name $BACKBONE\_$EXP_NAME \
   --output_dir $OUTPUT_DIR \
-  --overwrite_output_dir \
   --report_to none \
   --kl_loss \
   --temporal_reconstruction
@@ -103,6 +99,7 @@ python src/tevatron/retriever/driver/encode.py \
   --model_name_or_path $OUTPUT_DIR \
   --lora_name_or_path $OUTPUT_DIR \
   --overwrite_output_dir
+
 
 # ==== ENCODE QUERIES ==== 
 python src/tevatron/retriever/driver/encode.py \

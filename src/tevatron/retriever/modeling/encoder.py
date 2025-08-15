@@ -130,26 +130,7 @@ class EncoderModel(nn.Module):
             train_args: TrainingArguments,
             **hf_kwargs,
     ):  
-        try:
-            _hf_kwargs = deepcopy(hf_kwargs)
-            _hf_kwargs.pop("attn_implementation")
-            base_model = cls.TRANSFORMER_CLS.from_pretrained(
-                model_args.model_name_or_path, 
-                trust_remote_code=True,
-                weights_only=False,
-                attn_implementation="flash_attention_2",
-                **_hf_kwargs
-            )
-            print("Using flash attention 2!")
-        except Exception as e:
-            print(e)
-            base_model = cls.TRANSFORMER_CLS.from_pretrained(
-                model_args.model_name_or_path, 
-                weights_only=False,
-                trust_remote_code=True, 
-                **hf_kwargs
-            )
-            print(f"Fall back to use {hf_kwargs['attn_implementation']}")
+        base_model = cls.try_using_flash_attn(model_args.model_name_or_path, hf_kwargs)
             
         if train_args.kl_loss:
             kl_loss_base_model = deepcopy(base_model)
@@ -214,49 +195,28 @@ class EncoderModel(nn.Module):
              normalize: bool = False,
              lora_name_or_path: str = None,
              **hf_kwargs):
+        """
+        Slightly modify how to load the LoRA fine-tuned model to disable this warning: 
+        UserWarning: Already found a `peft_config` attribute in the model. This will lead to having multiple adapters in the model. Make sure to know what you are doing!
+        This is because the base_model will load a checkpoint that already has peft_config attribute in it.
+        """
 
-        if lora_name_or_path:
+        # if lora_name_or_path:
+        try:
+            # Always try to load as a PEFT model first
             lora_config = LoraConfig.from_pretrained(lora_name_or_path, **hf_kwargs)
-
-            """
-            Slightly modify how to load the LoRA fine-tuned model to disable this warning: 
-            UserWarning: Already found a `peft_config` attribute in the model. This will lead to having multiple adapters in the model. Make sure to know what you are doing!
-            This is because the base_model will load a checkpoint that already has peft_config attribute in it.
-            """
-            # base_model = cls.TRANSFORMER_CLS.from_pretrained(
-            #     lora_config.base_model_name_or_path, # type: ignore
-            #     weights_only=False,
-            #     trust_remote_code=True,
-            #     **hf_kwargs,
-            # )
+        except Exception as e:
+            logger.debug(e)
+            logger.warning("Either your model is not a PEFT-model or you are missing the lora_name_or_path argument.")
+            logger.info("Consider your model as a normal model.")
+            lora_config = None
             
-            try:
-                _hf_kwargs = deepcopy(hf_kwargs)
-                _hf_kwargs.pop("attn_implementation")
-                base_model = cls.TRANSFORMER_CLS.from_pretrained(
-                    lora_config.base_model_name_or_path, 
-                    trust_remote_code=True,
-                    weights_only=False,
-                    attn_implementation="flash_attention_2",
-                    **_hf_kwargs
-                )
-                print("Using flash attention 2!")
-            except Exception as e:
-                print(e)
-                base_model = cls.TRANSFORMER_CLS.from_pretrained(
-                    lora_config.base_model_name_or_path, 
-                    weights_only=False,
-                    trust_remote_code=True, 
-                    **hf_kwargs
-                )
-                print(f"Fall back to use {hf_kwargs['attn_implementation']}")
-
-            if base_model.config.pad_token_id is None:
-                base_model.config.pad_token_id = 0
-
+        if lora_config is not None:
+            logger.info(" Loaded LORA config!!! ")
+            base_model = cls.try_using_flash_attn(lora_config.base_model_name_or_path, hf_kwargs)
             lora_model = PeftModel.from_pretrained(
                 base_model,
-                lora_name_or_path,
+                model_name_or_path,
                 config=lora_config,
             )
             lora_model = lora_model.merge_and_unload()
@@ -265,38 +225,44 @@ class EncoderModel(nn.Module):
                 pooling=pooling,
                 normalize=normalize
             )
-        else:            
-            try:
-                _hf_kwargs = deepcopy(hf_kwargs)
-                _hf_kwargs.pop("attn_implementation")
-                base_model = cls.TRANSFORMER_CLS.from_pretrained(
-                    model_name_or_path, 
-                    trust_remote_code=True,
-                    weights_only=False,
-                    attn_implementation="flash_attention_2",
-                    **_hf_kwargs
-                )
-                print("Using flash attention 2!")
-            except Exception as e:
-                print(e)
-                base_model = cls.TRANSFORMER_CLS.from_pretrained(
-                    model_name_or_path, 
-                    weights_only=False,
-                    trust_remote_code=True, 
-                    **hf_kwargs
-                )
-                print(f"Fall back to use {hf_kwargs['attn_implementation']}")
-
-            if base_model.config.pad_token_id is None:
-                base_model.config.pad_token_id = 0
-
+        else:
+            logger.info(" This is not a PEFT model!!! ")
+            base_model = cls.try_using_flash_attn(model_name_or_path, hf_kwargs)
             model = cls(
                 encoder=base_model,
                 pooling=pooling,
                 normalize=normalize
             )
-            print("Please provide lora_name_or_path to load the PEFT model correctly!!!")
+
+        # print("Please provide lora_name_or_path to load the PEFT model correctly!!!")
         return model
+
+    @classmethod
+    def try_using_flash_attn(cls, model_name_or_path, hf_kwargs):
+        try:
+            hf_kwargs["attn_implementation"] = "flash_attention_2"
+            base_model = cls.TRANSFORMER_CLS.from_pretrained(
+                    model_name_or_path, 
+                    trust_remote_code=True,
+                    weights_only=False,
+                    **hf_kwargs
+                )
+            logger.info("Using flash attention 2!")
+        except Exception as e:
+            logger.exception(e)
+            hf_kwargs["attn_implementation"] = "sdpa"
+            base_model = cls.TRANSFORMER_CLS.from_pretrained(
+                    model_name_or_path, 
+                    weights_only=False,
+                    trust_remote_code=True,
+                    **hf_kwargs
+                )
+            logger.info(f"Fall back to use {hf_kwargs['attn_implementation']}")
+            
+        if base_model.config.pad_token_id is None:
+            base_model.config.pad_token_id = 0
+            
+        return base_model
 
     def save(self, output_dir: str):
         self.encoder.save_pretrained(output_dir)

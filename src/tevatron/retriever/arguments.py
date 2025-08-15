@@ -51,12 +51,14 @@ class ModelArguments:
     )
 
     lora_r: int = field(
-        default=16,
+        # default=16,
+        default=4,
         metadata={"help": "lora r"}
     )
 
     lora_alpha: int = field(
-        default=64,
+        # default=64,
+        default=16,
         metadata={"help": "lora alpha"}
     )
 
@@ -158,14 +160,16 @@ class DataArguments:
     encode_output_path: str = field(default=None, metadata={"help": "where to save the encode"})
 
     query_max_len: Optional[int] = field(
-        default=32,
+        # default=32,
+        default=512,
         metadata={
             "help": "The maximum total input sequence length after tokenization for query. Sequences longer "
                     "than this will be truncated, sequences shorter will be padded."
         },
     )
     passage_max_len: Optional[int] = field(
-        default=128,
+        # default=128,
+        default=512,
         metadata={
             "help": "The maximum total input sequence length after tokenization for passage. Sequences longer "
                     "than this will be truncated, sequences shorter will be padded."
@@ -229,11 +233,20 @@ class TevatronTrainingArguments(TrainingArguments):
     gc_p_chunk_size: int = field(default=32)
     dataloader_num_workers: int = field(default=0)
     tf32: bool = field(default=True)
-    report_to: str = field(default="wandb")
+    report_to: str = field(default="none") # wandb
     save_total_limit: int = field(default=1)
     max_length: int = field(default=512)
     seed: int = field(default=42)
     data_seed: int = field(default=42)
+    overwrite_output_dir: bool = field(
+        default=True,
+        metadata={
+            "help": (
+                "Overwrite the content of the output directory. "
+                "Use this to continue training if output_dir points to a checkpoint directory."
+            )
+        },
+    )
 
     # For SentenceBertStyle dataset
     batch_sampler: BatchSamplers = field(
@@ -245,10 +258,18 @@ class TevatronTrainingArguments(TrainingArguments):
     modules_to_save: List[str] = field(default_factory=lambda: [])
     
     # madaptor specific
-    kl_loss: bool = field(default=False)
+    matryoshka: bool = field(default=False) # This will enable the loss for semantic matryoshka embeddings (512-768)
+    temporal: bool = field(default=False) # This will enable the loss for the temporal embedding subspace.
+    
+    # Following flags will be considered if the temporal flag is true
+    temporal_as_sentence: bool = field(default=False)
+    extracted_temporal: bool = field(default=False)
     temporal_reconstruction: bool = field(default=False)
+    
+    # Others to improve the performance
     filter_false_negatives: bool = field(default=False)
     truncated_normalize: bool = field(default=False)
+    kl_loss: bool = field(default=False)
 
     # For evaluation
     # eval_on_start: bool = field(default=True)

@@ -34,10 +34,10 @@ cd /home/thuy0050/code/tevatron
 DATA_ROOT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/data/third_work
 OUTPUT_DIR_ROOT=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron
 
-DATA_NAME=ChroniclingAmericaQA
+DATA_NAME=temporal_nobel_prize
 MODEL_NAME=ts-retriever
 BACKBONE=contriever
-EXP_NAME=ts-retriever_5epoch_temp0.05_lora_bf16
+EXP_NAME=ts-retriever_10epoch_temp0.05_lora_bf16
 OUTPUT_DIR=$OUTPUT_DIR_ROOT/$DATA_NAME/$MODEL_NAME/$BACKBONE/$EXP_NAME
 
 CHECKPOINT_DIR=facebook/contriever
@@ -56,20 +56,18 @@ python src/tevatron/retriever/driver/train.py \
   --pooling avg \
   --bf16 \
   --train_group_size 2 \
-  --query_max_len 512 \
-  --passage_max_len 512 \
   --per_device_train_batch_size 64 \
   --learning_rate 1e-4 \
   --temperature 0.05 \
   --logging_steps 100 \
-  --max_steps 10 \
+  --num_train_epochs 10 \
   --lora \
   --lora_r 4 \
   --lora_alpha 16 \
   --lora_target_modules all-linear \
   --attn_implementation sdpa \
   --dataset_name $DATA_ROOT_DIR/tevatron/Tevatron___msmarco-passage  \
-  --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/processed/train.jsonl \
+  --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/train_temporal_v2.jsonl \
   --model_name_or_path $CHECKPOINT_DIR \
   --run_name $BACKBONE\_$EXP_NAME \
   --output_dir $OUTPUT_DIR \
@@ -82,58 +80,58 @@ python src/tevatron/retriever/driver/train.py \
 #     "dev": "$DATA_ROOT_DIR/temporal/nobel_prize/train/dev.jsonl",
 # }
 
-# # Scaled Dot Product Attention, for BERT
-# # ==== ENCODE CORPUS ====
-# python src/tevatron/retriever/driver/encode.py \
-#   --per_device_eval_batch_size 512 \
-#   --passage_max_len 512 \
-#   --pooling avg \
-#   --bf16 \
-#   --normalize \
-#   --attn_implementation sdpa \
-#   --dataset_name LouisDo2108/temporal-nobel-prize \
-#   --dataset_config corpus \
-#   --encode_output_path $OUTPUT_DIR/corpus_emb.pkl \
-#   --model_name_or_path $OUTPUT_DIR \
-#   --lora_name_or_path $OUTPUT_DIR \
-#   --overwrite_output_dir
+# Scaled Dot Product Attention, for BERT
+# ==== ENCODE CORPUS ====
+python src/tevatron/retriever/driver/encode.py \
+  --per_device_eval_batch_size 512 \
+  --passage_max_len 512 \
+  --pooling avg \
+  --bf16 \
+  --normalize \
+  --attn_implementation sdpa \
+  --dataset_name LouisDo2108/temporal-nobel-prize \
+  --dataset_config corpus \
+  --encode_output_path $OUTPUT_DIR/corpus_emb.pkl \
+  --model_name_or_path $OUTPUT_DIR \
+  --overwrite_output_dir
 
-# # ==== ENCODE QUERIES ==== 
-# python src/tevatron/retriever/driver/encode.py \
-#   --per_device_eval_batch_size 512 \
-#   --query_max_len 512 \
-#   --pooling avg \
-#   --bf16 \
-#   --normalize \
-#   --attn_implementation sdpa \
-#   --encode_is_query \
-#   --dataset_name LouisDo2108/temporal-nobel-prize \
-#   --dataset_config query \
-#   --model_name_or_path $OUTPUT_DIR \
-#   --lora_name_or_path $OUTPUT_DIR \
-#   --encode_output_path $OUTPUT_DIR/queries_emb.pkl \
-#   --overwrite_output_dir
 
-# # ==== RETRIEVAL ====  
-# set -f && OMP_NUM_THREADS=12 python -m tevatron.retriever.driver.search \
-#     --query_reps $OUTPUT_DIR/queries_emb.pkl \
-#     --passage_reps $OUTPUT_DIR/corpus_emb.pkl \
-#     --depth 100 \
-#     --batch_size 512 \
-#     --save_text \
-#     --save_ranking_to $OUTPUT_DIR/rank.txt
+# ==== ENCODE QUERIES ==== 
+python src/tevatron/retriever/driver/encode.py \
+  --per_device_eval_batch_size 512 \
+  --query_max_len 512 \
+  --pooling avg \
+  --bf16 \
+  --normalize \
+  --attn_implementation sdpa \
+  --encode_is_query \
+  --dataset_name LouisDo2108/temporal-nobel-prize \
+  --dataset_config query \
+  --model_name_or_path $OUTPUT_DIR \
+  --encode_output_path $OUTPUT_DIR/queries_emb.pkl \
+  --overwrite_output_dir
 
-# # ==== CONVERT TO TREC FORMAT ====  
-# python -m tevatron.utils.format.convert_result_to_trec \
-#     --input $OUTPUT_DIR/rank.txt \
-#     --output $OUTPUT_DIR/rank.trec \
-#     --remove_query
+# ==== RETRIEVAL ====  
+set -f && OMP_NUM_THREADS=12 python -m tevatron.retriever.driver.search \
+    --query_reps $OUTPUT_DIR/queries_emb.pkl \
+    --passage_reps $OUTPUT_DIR/corpus_emb.pkl \
+    --depth 100 \
+    --batch_size 512 \
+    --save_text \
+    --save_ranking_to $OUTPUT_DIR/rank.txt
 
-# # ==== EVALUATE RESULTS USING PYSERINI ====
-# python -m pyserini.eval.trec_eval -c \
-#   -mP.10 -mrecall.10 -mndcg_cut.10 -mrecip_rank -mmap \
-#   $DATA_ROOT_DIR/temporal/temporal_nobel_prize/test/qrel.txt \
-#   $OUTPUT_DIR/rank.trec
+# ==== CONVERT TO TREC FORMAT ====  
+python -m tevatron.utils.format.convert_result_to_trec \
+    --input $OUTPUT_DIR/rank.txt \
+    --output $OUTPUT_DIR/rank.trec \
+    --remove_query
+
+# ==== EVALUATE RESULTS USING PYSERINI ====
+# Note that the M here will set the @k (i.e., @M) of mrr and map, by default, if not set, M=100
+python -m pyserini.eval.trec_eval -c \
+  -mP.10 -mrecall.10 -mndcg_cut.10 -M 10 -mrecip_rank -mmap \
+  $DATA_ROOT_DIR/temporal/temporal_nobel_prize/test/qrel.txt \
+  $OUTPUT_DIR/rank.trec
 
 # # ==== CONVERT TO MSMARCO FORMAT ====  
 # python -m tevatron.utils.format.convert_result_to_marco \
@@ -145,8 +143,8 @@ python src/tevatron/retriever/driver/train.py \
 #   $DATA_ROOT_DIR/temporal/temporal_nobel_prize/test/qrel.txt \
 #   $OUTPUT_DIR/rank.msmarco
 
-# python louis/nanobeir_scripts/eval_nanobeir_with_sbert.py \
-#   --model_name_or_path $OUTPUT_DIR \
-#   --nanobeir_datasets NQ \
-#   --pooling avg \
-#   --bf16
+python louis/beir_scripts/eval_nanobeir_with_sbert.py \
+  --model_name_or_path $OUTPUT_DIR \
+  --nanobeir_datasets NQ \
+  --pooling avg \
+  --bf16
