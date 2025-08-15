@@ -42,6 +42,9 @@ def select_collators_and_models(model_args, data_args, training_args):
             return collator_dict["extracted_temporal"], NaiveTemporalProjector
         if training_args.temporal_reconstruction:
             return collator_dict["extracted_temporal_with_reconstruction"], NaiveTemporalProjectorReconstruction
+
+        # Default case for temporal
+        return collator_dict["extracted_temporal"], NaiveTemporalProjector
     else:
         # Only semantic matryoshka
         return collator_dict["tevatron_standard"], NaiveTemporal
