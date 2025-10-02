@@ -7,9 +7,10 @@ from pdb import set_trace as st
 from dataclasses import asdict
 
 import torch
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, AutoConfig
 import numpy as np
 import random
+from pathlib import Path
 
 from transformers.utils.import_utils import is_torch_available
 from transformers.hf_argparser import HfArgumentParser
@@ -21,7 +22,8 @@ from tevatron.retriever.collator import TrainCollator
 from tevatron.retriever.dataset import TrainDataset
 from tevatron.retriever.gc_trainer import GradCacheTrainer as GCTrainer
 from tevatron.retriever.modeling import DenseModel
-from tevatron.retriever.trainer import TevatronTrainer as Trainer
+# from tevatron.retriever.trainer import TevatronTrainer as Trainer
+from tevatron.retriever.trainer import MAdaptorTrainer as Trainer
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +130,7 @@ def main():
 
     set_seed(training_args.seed)
 
+    default_config = AutoConfig.from_pretrained(model_args.model_name_or_path, trust_remote_code=True)
     tokenizer = AutoTokenizer.from_pretrained(
         (
             model_args.tokenizer_name
@@ -159,21 +162,31 @@ def main():
         model_args,
         training_args,
         cache_dir=model_args.cache_dir,
-        # torch_dtype=torch_dtype,
+        torch_dtype=default_config.torch_dtype,
         attn_implementation=model_args.attn_implementation,
     )
+    get_params_info(model)
 
     train_dataset = TrainDataset(data_args)
     collator = TrainCollator(data_args, tokenizer)
+    
+    eval_data_args = deepcopy(data_args)
+    eval_data_args.dataset_path = data_args.eval_dataset_path
+    eval_data_args.dataset_split = "eval"
+    eval_dataset = TrainDataset(data_args)
+    
+    logger.info(f"Using {TrainCollator} collator and {model} model")
 
     trainer_cls = GCTrainer if training_args.grad_cache else Trainer
     trainer = trainer_cls(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
+        eval_dataset=eval_dataset,
         data_collator=collator,
     )
     train_dataset.set_trainer(trainer)
+    eval_dataset.set_trainer(trainer)
 
     last_checkpoint = None
     # if os.path.isdir(training_args.output_dir):
@@ -188,7 +201,6 @@ def main():
     #         cache_dir=model_args.cache_dir,
     #         attn_implementation=model_args.attn_implementation,
     #     )
-    get_params_info(model)
     trainer.train(resume_from_checkpoint=(last_checkpoint is not None))
     if wandb.run is not None:
         wandb.run.config.update(asdict(model_args), allow_val_change=True)
@@ -201,9 +213,21 @@ def main():
         os.path.join(training_args.output_dir, "full_config.json"),
         training_args_to_save,
     )
-    trainer.save_model()
-    if trainer.is_world_process_zero():
-        tokenizer.save_pretrained(training_args.output_dir)
+    # trainer.save_model()
+    # if trainer.is_world_process_zero():
+    #     tokenizer.save_pretrained(training_args.output_dir)
+    # Copy the model in the checkpoint folder to the parent folder for ease of evaluation
+
+    src_path = max(
+        Path(training_args.output_dir).glob("checkpoint-*"),
+        key=lambda p: int(p.name.split("-")[-1]),
+        default=None
+    )
+
+    for f in src_path.glob("*.*"):
+        trg_path = src_path.parent # gets the parent of the folder 
+        f.rename(trg_path.joinpath(f.name)) # moves to parent folder.
+    src_path.rmdir()
 
 
 if __name__ == "__main__":

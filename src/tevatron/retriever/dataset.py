@@ -110,6 +110,9 @@ class TrainDataset(Dataset):
         group = self.train_data[item]
         epoch = int(self.trainer.state.epoch)
         _hashed_seed = hash(item + self.trainer.args.seed)
+        
+        self.data_args.passage_prefix = self.data_args.passage_prefix.replace("\\n", "\n").strip() + " "
+        self.data_args.query_prefix = self.data_args.query_prefix.replace("\\n", "\n").strip() + " "
 
         # Handling the legacy format with 'positive_passages'
         if 'positive_passages' in group:
@@ -275,13 +278,16 @@ class EncodeDataset(Dataset):
                 num_shards=self.data_args.dataset_number_of_shards,
                 index=self.data_args.dataset_shard_index,
             )
-        self.query_instruction = self.data_args.query_instruction
 
     def __len__(self):
         return len(self.encode_data)
 
     def __getitem__(self, item):
         content = self.encode_data[item]
+        
+        self.data_args.passage_prefix = self.data_args.passage_prefix.replace("\\n", "\n").strip() + " "
+        self.data_args.query_prefix = self.data_args.query_prefix.replace("\\n", "\n").strip() + " "
+        
         if self.data_args.encode_is_query:
             # content_id = content['query_id']
             content_id = content.get("query_id", "")
@@ -290,7 +296,6 @@ class EncodeDataset(Dataset):
             content_text = content.get('query_text', content.get('query', ''))
             if content_text == '':
                 content_text = content.get("text", "")  # For NanoNQ
-            content_text = self.query_instruction.strip() + " " + content_text # For model that has the query instruction like bge-base-en-v1.5
             content_text = self.data_args.query_prefix + content_text
             content_image = content.get('query_image', None)
             content_video = content.get('query_video', None)

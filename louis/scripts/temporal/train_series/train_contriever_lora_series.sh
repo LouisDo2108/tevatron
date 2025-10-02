@@ -37,55 +37,78 @@ OUTPUT_DIR_ROOT=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron
 DATA_NAME=temporal_nobel_prize
 MODEL_NAME=ts-retriever
 BACKBONE=contriever
-EXP_NAME=ts-dev-remove-only-temporal-answers-add
-OUTPUT_DIR=$OUTPUT_DIR_ROOT/$DATA_NAME/$MODEL_NAME/$BACKBONE/$EXP_NAME
+: "${EXP_NAME:=dev}"
 
-CHECKPOINT_DIR=facebook/contriever
+# Derived variable
+: "${OUTPUT_DIR:=$OUTPUT_DIR_ROOT/$DATA_NAME/$MODEL_NAME/$BACKBONE/$EXP_NAME}"
+
+: "${CHECKPOINT_DIR:=facebook/contriever}"
 
 export WANDB_ENTITY=htluc19
 export WANDB_PROJECT=temporal
 
 mkdir -p $OUTPUT_DIR # Create folder if not exists
 
-# negative_size = self.data_args.train_group_size - 1
-# lora target modules for contriever: query,key,value,dense,word_embeddings,position_embeddings
+echo "\nRunning experiment with EXP_NAME: $EXP_NAME; OUTPUT_DIR: $OUTPUT_DIR\n"
+
+# ===== Training parameters (overridable) =====
+: "${TRAIN_GROUP_SIZE:=2}"
+: "${PER_DEVICE_TRAIN_BATCH_SIZE:=64}"
+: "${LEARNING_RATE:=1e-4}"
+: "${TEMPERATURE:=0.05}"
+: "${LOGGING_STEPS:=10}"
+: "${NUM_TRAIN_EPOCHS:=5}"
+: "${GRADIENT_ACCUMULATION_STEPS:=1}"
+: "${REPORT_TO:=none}"
+
+# ===== Boolean / feature flags (overridable) =====
+: "${MATRYOSHKA:=}"
+: "${KL_LOSS:=}"
+: "${TRUNCATED_NORMALIZE:=}"
+: "${FILTER_FALSE_NEGATIVES:=}"
+: "${TEMPORAL:=}"
+: "${TEMPORAL_RECONSTRUCTION:=}"
+: "${TEMPORAL_AS_SENTENCE:=}"
+: "${EXTRACTED_TEMPORAL:=}"
 
 # ==== TRAIN RETRIEVER ====
 python louis/madaptor/train_temporal.py \
+  --dataset_name $DATA_ROOT_DIR/tevatron/Tevatron___msmarco-passage  \
+  --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/train_temporal_v2.jsonl \
+  --eval_dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/dev.jsonl \
+  --model_name_or_path $CHECKPOINT_DIR \
+  --run_name $BACKBONE\_$EXP_NAME \
+  --output_dir $OUTPUT_DIR \
   --do_train \
   --pooling avg \
   --bf16 \
-  --train_group_size 8 \
-  --per_device_train_batch_size 256 \
-  --learning_rate 1e-4 \
-  --temperature 0.05 \
-  --logging_steps 10 \
-  --num_train_epochs 5 \
-  --gradient_accumulation_steps 1 \
   --lora \
   --lora_r 4 \
   --lora_alpha 16 \
   --lora_target_modules all-linear \
   --modules_to_save temporal_projector \
-  --dataset_name $DATA_ROOT_DIR/tevatron/Tevatron___msmarco-passage  \
-  --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/enhanced_temporal/v3/train_longer_than_5.jsonl \
-  --eval_dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/dev.jsonl \
-  --model_name_or_path $CHECKPOINT_DIR \
-  --run_name $BACKBONE\_$EXP_NAME \
-  --output_dir $OUTPUT_DIR \
-  --report_to none \
-  --matryoshka \
-  --truncated_normalize \
-  --filter_false_negatives \
-  --temporal \
-  --temporal_reconstruction \
-  --kl_loss
+  --train_group_size $TRAIN_GROUP_SIZE \
+  --per_device_train_batch_size $PER_DEVICE_TRAIN_BATCH_SIZE \
+  --learning_rate $LEARNING_RATE \
+  --temperature $TEMPERATURE \
+  --logging_steps $LOGGING_STEPS \
+  --num_train_epochs $NUM_TRAIN_EPOCHS \
+  --gradient_accumulation_steps $GRADIENT_ACCUMULATION_STEPS \
+  --report_to $REPORT_TO \
+  $MATRYOSHKA \
+  $KL_LOSS \
+  $TRUNCATED_NORMALIZE \
+  $FILTER_FALSE_NEGATIVES \
+  $TEMPORAL \
+  $TEMPORAL_RECONSTRUCTION \
+  $TEMPORAL_AS_SENTENCE \
+  $EXTRACTED_TEMPORAL
 
-# --dataset_path Modify inside the code
-# data_args.dataset_path = {
-#     "train": "$DATA_ROOT_DIR/temporal/nobel_prize/train/train.jsonl",
-#     "dev": "$DATA_ROOT_DIR/temporal/nobel_prize/train/dev.jsonl",
-# }
+# # --dataset_path Modify inside the code
+# # data_args.dataset_path = {
+# #     "train": "$DATA_ROOT_DIR/temporal/nobel_prize/train/train.jsonl",
+# #     "dev": "$DATA_ROOT_DIR/temporal/nobel_prize/train/dev.jsonl",
+# # }
 
 # # Scaled Dot Product Attention, for BERT
 # # ==== ENCODE CORPUS ====
@@ -95,7 +118,6 @@ python louis/madaptor/train_temporal.py \
 #   --pooling avg \
 #   --bf16 \
 #   --normalize \
-#   --attn_implementation sdpa \
 #   --dataset_name LouisDo2108/temporal-nobel-prize \
 #   --dataset_config corpus \
 #   --encode_output_path $OUTPUT_DIR/corpus_emb.pkl \
@@ -111,7 +133,6 @@ python louis/madaptor/train_temporal.py \
 #   --pooling avg \
 #   --bf16 \
 #   --normalize \
-#   --attn_implementation sdpa \
 #   --encode_is_query \
 #   --dataset_name LouisDo2108/temporal-nobel-prize \
 #   --dataset_config query \

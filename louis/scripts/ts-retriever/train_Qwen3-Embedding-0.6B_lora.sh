@@ -22,7 +22,9 @@ source ~/.bashrc
 conda activate tevatron
 
 export CUDA_VISIBLE_DEVICES=0
-export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+# export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export PYTORCH_CUDA_ALLOC_CONF=garbage_collection_threshold:0.6
 # export TQDM_DISABLE=1 # Avoid logging tqdm progress bars
 # export TORCH_USE_CUDA_DSA=0 # Set to 1 only if debugging
 # export CUDA_LAUNCH_BLOCKING=0 # Set to 1 only if debugging
@@ -34,112 +36,91 @@ cd /home/thuy0050/code/tevatron
 DATA_ROOT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/data/third_work
 OUTPUT_DIR_ROOT=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron
 
+CHECKPOINT_DIR=Qwen/Qwen3-Embedding-0.6B
 DATA_NAME=temporal_nobel_prize
 MODEL_NAME=ts-retriever
-BACKBONE=contriever
-: "${EXP_NAME:=dev}"
-
-# Derived variable
-: "${OUTPUT_DIR:=$OUTPUT_DIR_ROOT/$DATA_NAME/$MODEL_NAME/$BACKBONE/$EXP_NAME}"
-
-: "${CHECKPOINT_DIR:=facebook/contriever}"
+BACKBONE=$CHECKPOINT_DIR
+EXP_NAME=baseline
+OUTPUT_DIR=$OUTPUT_DIR_ROOT/$DATA_NAME/$MODEL_NAME/$BACKBONE/$EXP_NAME
 
 export WANDB_ENTITY=htluc19
 export WANDB_PROJECT=temporal
 
 mkdir -p $OUTPUT_DIR # Create folder if not exists
 
-echo "\nRunning experiment with EXP_NAME: $EXP_NAME; OUTPUT_DIR: $OUTPUT_DIR"
-
-# ===== Training parameters (overridable) =====
-: "${TRAIN_GROUP_SIZE:=2}"
-: "${PER_DEVICE_TRAIN_BATCH_SIZE:=64}"
-: "${LEARNING_RATE:=1e-4}"
-: "${TEMPERATURE:=0.05}"
-: "${LOGGING_STEPS:=10}"
-: "${NUM_TRAIN_EPOCHS:=5}"
-: "${GRADIENT_ACCUMULATION_STEPS:=1}"
-: "${REPORT_TO:=none}"
-
-# ===== Boolean / feature flags (overridable) =====
-: "${MATRYOSHKA:=}"
-: "${KL_LOSS:=}"
-: "${TRUNCATED_NORMALIZE:=}"
-: "${FILTER_FALSE_NEGATIVES:=}"
-: "${TEMPORAL:=}"
-: "${TEMPORAL_RECONSTRUCTION:=}"
-: "${TEMPORAL_AS_SENTENCE:=}"
-: "${EXTRACTED_TEMPORAL:=}"
-
 # ==== TRAIN RETRIEVER ====
-python louis/madaptor/train_temporal.py \
-  --dataset_name $DATA_ROOT_DIR/tevatron/Tevatron___msmarco-passage  \
-  --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/train_temporal_v2.jsonl \
-  --eval_dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/dev.jsonl \
-  --model_name_or_path $CHECKPOINT_DIR \
-  --run_name $BACKBONE\_$EXP_NAME \
-  --output_dir $OUTPUT_DIR \
+python src/tevatron/retriever/driver/train.py \
   --do_train \
-  --pooling avg \
+  --pooling last \
   --bf16 \
+  --normalize \
+  --train_group_size 2 \
+  --per_device_train_batch_size 512 \
+  --max_length 2048 \
+  --learning_rate 1e-4 \
+  --temperature 0.02 \
+  --logging_steps 10 \
+  --num_train_epochs 10 \
+  --gradient_accumulation_steps 1 \
   --lora \
   --lora_r 4 \
   --lora_alpha 16 \
   --lora_target_modules all-linear \
-  --modules_to_save temporal_projector \
-  --train_group_size $TRAIN_GROUP_SIZE \
-  --per_device_train_batch_size $PER_DEVICE_TRAIN_BATCH_SIZE \
-  --learning_rate $LEARNING_RATE \
-  --temperature $TEMPERATURE \
-  --logging_steps $LOGGING_STEPS \
-  --num_train_epochs $NUM_TRAIN_EPOCHS \
-  --gradient_accumulation_steps $GRADIENT_ACCUMULATION_STEPS \
-  --report_to $REPORT_TO \
-  $MATRYOSHKA \
-  $KL_LOSS \
-  $TRUNCATED_NORMALIZE \
-  $FILTER_FALSE_NEGATIVES \
-  $TEMPORAL \
-  $TEMPORAL_RECONSTRUCTION \
-  $TEMPORAL_AS_SENTENCE \
-  $EXTRACTED_TEMPORAL
+  --attn_implementation sdpa \
+  --passage_prefix 'Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:' \
+  --dataset_name $DATA_ROOT_DIR/tevatron/Tevatron___msmarco-passage  \
+  --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/train.jsonl \
+  --eval_dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/dev.jsonl \
+  --model_name_or_path $CHECKPOINT_DIR \
+  --run_name $BACKBONE\_$EXP_NAME \
+  --output_dir $OUTPUT_DIR \
+  --report_to wandb \
+  --gradient_checkpointing \
+  --padding_side left
 
-# # --dataset_path Modify inside the code
-# # data_args.dataset_path = {
-# #     "train": "$DATA_ROOT_DIR/temporal/nobel_prize/train/train.jsonl",
-# #     "dev": "$DATA_ROOT_DIR/temporal/nobel_prize/train/dev.jsonl",
-# # }
+# --grad_cache \
+#   --gc_p_chunk_size 64 \
+#   --gc_q_chunk_size 64 \
 
-# Scaled Dot Product Attention, for BERT
+# --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/train.jsonl \
+# --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/enhanced_temporal/v4/train.jsonl \
+
 # ==== ENCODE CORPUS ====
 python src/tevatron/retriever/driver/encode.py \
   --per_device_eval_batch_size 512 \
-  --passage_max_len 512 \
-  --pooling avg \
+  --passage_max_len 2048 \
+  --pooling last \
   --bf16 \
   --normalize \
+  --attn_implementation sdpa \
   --dataset_name LouisDo2108/temporal-nobel-prize \
   --dataset_config corpus \
   --encode_output_path $OUTPUT_DIR/corpus_emb.pkl \
   --model_name_or_path $OUTPUT_DIR \
   --lora_name_or_path $OUTPUT_DIR \
-  --overwrite_output_dir
-
+  --overwrite_output_dir \
+  --query_prefix "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:" \
+  --passage_prefix "" \
+  --padding_side left
 
 # ==== ENCODE QUERIES ==== 
 python src/tevatron/retriever/driver/encode.py \
   --per_device_eval_batch_size 512 \
-  --query_max_len 512 \
-  --pooling avg \
+  --query_max_len 2048 \
+  --pooling last \
   --bf16 \
   --normalize \
+  --attn_implementation sdpa \
   --encode_is_query \
   --dataset_name LouisDo2108/temporal-nobel-prize \
   --dataset_config query \
   --model_name_or_path $OUTPUT_DIR \
   --lora_name_or_path $OUTPUT_DIR \
   --encode_output_path $OUTPUT_DIR/queries_emb.pkl \
-  --overwrite_output_dir
+  --overwrite_output_dir \
+  --query_prefix "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:" \
+  --passage_prefix "" \
+  --padding_side left
 
 # ==== RETRIEVAL ====  
 set -f && OMP_NUM_THREADS=12 python -m tevatron.retriever.driver.search \
@@ -174,7 +155,10 @@ python -m pyserini.eval.trec_eval -c \
 #   $OUTPUT_DIR/rank.msmarco
 
 python louis/beir_scripts/eval_nanobeir_with_sbert.py \
-    --model_name_or_path $CHECKPOINT_DIR \
-    --nanobeir_datasets NQ \
-    --pooling mean \
-    --bf16
+  --model_name_or_path $OUTPUT_DIR \
+  --nanobeir_datasets NQ \
+  --pooling lasttoken \
+  --bf16 \
+  --max_seq_length 2048 \
+  --query_prompts "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:" \
+  --corpus_prompts ""

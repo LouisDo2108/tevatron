@@ -56,11 +56,13 @@ def split_dense_inputs(model_input: dict, chunk_size: int):
 
 
 def get_dense_rep(x):
-    if x.q_reps is None:
-        return x.p_reps
-    else:
+    # if x.q_reps is None:
+    #     return x.p_reps
+    # else:
+    #     return x.q_reps
+    if x.p_reps is None:
         return x.q_reps
-
+    return x.p_reps
 
 class GradCacheTrainer(TevatronTrainer):
     def __init__(self, *args, **kwargs):
@@ -95,6 +97,6 @@ class GradCacheTrainer(TevatronTrainer):
 
         _distributed = self.args.local_rank > -1
         self.gc.models = [model, model]
-        loss = self.gc(queries, passages, no_sync_except_last=_distributed)
+        loss = self.gc(queries, passages, no_sync_except_last=False) # _distributed
 
         return loss / self._dist_loss_scale_factor

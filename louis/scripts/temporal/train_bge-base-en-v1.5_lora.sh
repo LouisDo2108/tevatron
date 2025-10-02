@@ -22,7 +22,9 @@ source ~/.bashrc
 conda activate tevatron
 
 export CUDA_VISIBLE_DEVICES=0
-export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+# export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export PYTORCH_CUDA_ALLOC_CONF=garbage_collection_threshold:0.6
 # export TQDM_DISABLE=1 # Avoid logging tqdm progress bars
 # export TORCH_USE_CUDA_DSA=0 # Set to 1 only if debugging
 # export CUDA_LAUNCH_BLOCKING=0 # Set to 1 only if debugging
@@ -34,20 +36,18 @@ cd /home/thuy0050/code/tevatron
 DATA_ROOT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/data/third_work
 OUTPUT_DIR_ROOT=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron
 
-DATA_NAME=temporal_nobel_prize
-MODEL_NAME=ts-retriever
-BACKBONE=bge-base-en-v1.5
-EXP_NAME=v3_qt
-OUTPUT_DIR=$OUTPUT_DIR_ROOT/$DATA_NAME/$MODEL_NAME/$BACKBONE/$EXP_NAME
-
 CHECKPOINT_DIR=BAAI/bge-base-en-v1.5
+DATA_NAME=temporal_nobel_prize
+MODEL_NAME=temporal
+BACKBONE=$CHECKPOINT_DIR
+EXP_NAME=matryoshka_qtpt
+OUTPUT_DIR=$OUTPUT_DIR_ROOT/$DATA_NAME/$MODEL_NAME/$BACKBONE/$EXP_NAME
 
 export WANDB_ENTITY=htluc19
 export WANDB_PROJECT=temporal
 
 mkdir -p $OUTPUT_DIR # Create folder if not exists
 
-# # negative_size = self.data_args.train_group_size - 1
 # ==== TRAIN RETRIEVER ====
 python louis/madaptor/train_temporal.py \
   --do_train \
@@ -55,36 +55,32 @@ python louis/madaptor/train_temporal.py \
   --bf16 \
   --normalize \
   --train_group_size 2 \
-  --per_device_train_batch_size 64 \
+  --per_device_train_batch_size 256 \
   --learning_rate 1e-4 \
   --temperature 0.02 \
   --logging_steps 10 \
-  --num_train_epochs 5 \
-  --gradient_accumulation_steps 4 \
+  --num_train_epochs 10 \
+  --gradient_accumulation_steps 2 \
   --lora \
   --lora_r 4 \
   --lora_alpha 16 \
   --lora_target_modules all-linear \
   --modules_to_save temporal_projector \
-  --passage_prefix "Represent this sentence for searching relevant passages: " \
+  --attn_implementation sdpa \
   --dataset_name $DATA_ROOT_DIR/tevatron/Tevatron___msmarco-passage  \
-  --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/train_temporal_v2.jsonl \
+  --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/enhanced_temporal/v4/train.jsonl \
   --eval_dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/dev.jsonl \
   --model_name_or_path $CHECKPOINT_DIR \
   --run_name $BACKBONE\_$EXP_NAME \
   --output_dir $OUTPUT_DIR \
+  --dataloader_num_workers 0 \
   --report_to none \
-  --kl_loss \
-  --temporal_reconstruction
+  --passage_prefix "Represent this sentence for searching relevant passages: " \
+  --temporal 
+  # --kl_loss
+  # --report_to wandb
   # --filter_false_negatives
 
-# --num_train_epochs 5 \
-
-# layer.11.intermediate.dense,layer.11.output.dense \
-# layer.11.intermediate.dense,layer.11.output.dense \
-# layer.11.attention.self.query,layer.11.attention.self.key,layer.11.attention.self.value,
-
-# Scaled Dot Product Attention, for BERT
 # ==== ENCODE CORPUS ====
 python src/tevatron/retriever/driver/encode.py \
   --per_device_eval_batch_size 512 \
@@ -98,8 +94,9 @@ python src/tevatron/retriever/driver/encode.py \
   --encode_output_path $OUTPUT_DIR/corpus_emb.pkl \
   --model_name_or_path $OUTPUT_DIR \
   --lora_name_or_path $OUTPUT_DIR \
-  --overwrite_output_dir
-
+  --overwrite_output_dir \
+  --query_prefix "Represent this sentence for searching relevant passages: " \
+  --passage_prefix ""
 
 # ==== ENCODE QUERIES ==== 
 python src/tevatron/retriever/driver/encode.py \
@@ -110,13 +107,14 @@ python src/tevatron/retriever/driver/encode.py \
   --normalize \
   --attn_implementation sdpa \
   --encode_is_query \
-  --query_prefix "Represent this sentence for searching relevant passages: " \
   --dataset_name LouisDo2108/temporal-nobel-prize \
   --dataset_config query \
   --model_name_or_path $OUTPUT_DIR \
   --lora_name_or_path $OUTPUT_DIR \
   --encode_output_path $OUTPUT_DIR/queries_emb.pkl \
-  --overwrite_output_dir
+  --overwrite_output_dir \
+  --query_prefix "Represent this sentence for searching relevant passages: " \
+  --passage_prefix ""
 
 # ==== RETRIEVAL ====  
 set -f && OMP_NUM_THREADS=12 python louis/madaptor/search.py \
@@ -153,6 +151,7 @@ python -m pyserini.eval.trec_eval -c \
 python louis/beir_scripts/eval_nanobeir_with_sbert.py \
     --model_name_or_path $OUTPUT_DIR \
     --nanobeir_datasets NQ \
-    --query_prompts "Represent this sentence for searching relevant passages: " \
     --pooling cls \
-    --bf16
+  --bf16 \
+  --query_prompts "Represent this sentence for searching relevant passages: " \
+  --corpus_prompts ""

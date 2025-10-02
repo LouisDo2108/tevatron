@@ -58,7 +58,7 @@ class EncoderModel(nn.Module):
             for name, param in self.base_model.named_parameters():
                 param.requires_grad = False
 
-    def forward(self, query: Dict[str, Tensor] = None, passage: Dict[str, Tensor] = None):
+    def forward(self, query: Dict[str, Tensor] = None, passage: Dict[str, Tensor] = None): 
         q_reps = self.encode_query(query) if query else None
         p_reps = self.encode_passage(passage) if passage else None
 
@@ -169,7 +169,6 @@ class EncoderModel(nn.Module):
 
             # print(lora_model.get_layer_status())
             # print(lora_model.get_model_status())
-            
             model = cls(
                 encoder=lora_model,
                 pooling=model_args.pooling,
@@ -219,7 +218,7 @@ class EncoderModel(nn.Module):
                 model_name_or_path,
                 config=lora_config,
             )
-            lora_model = lora_model.merge_and_unload()
+            # lora_model = lora_model.merge_and_unload()
             model = cls(
                 encoder=lora_model,
                 pooling=pooling,

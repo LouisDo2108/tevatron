@@ -68,7 +68,12 @@ def get_params_info(model):
 
     print("\nAll trainable parameters:")
     for name, param in model.named_parameters():
+        
+        if name.startswith("base_model."):
+            # This is the duplicate of the base model for KL loss
+           continue 
         all_param += param.numel()
+        
         if param.requires_grad:
             trainable_param += param.numel()
             print(name, param.numel())

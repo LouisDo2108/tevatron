@@ -23,7 +23,7 @@ class DenseModel(EncoderModel):
             query_hidden_states = self.encoder(
                 **qry, return_dict=True, adapter_mask=adapter_mask,
             )
-            query_hidden_states = query_hidden_states.last_hidden_state[:, :, :768]
+            query_hidden_states = query_hidden_states.last_hidden_state
             return self._pooling(query_hidden_states, qry["attention_mask"])
 
     def encode_passage(self, psg):
@@ -35,7 +35,7 @@ class DenseModel(EncoderModel):
             task_id = self.encoder._adaptation_map[task]
             adapter_mask = torch.full((psg["input_ids"].size(0),),task_id,dtype=torch.int32,device=psg["input_ids"].device,)
             query_hidden_states = self.encoder(**psg, return_dict=True, adapter_mask=adapter_mask,)
-            query_hidden_states = query_hidden_states.last_hidden_state[:, :, :768]
+            query_hidden_states = query_hidden_states.last_hidden_state
             return self._pooling(query_hidden_states, psg["attention_mask"])
 
     def _pooling(self, last_hidden_state, attention_mask):

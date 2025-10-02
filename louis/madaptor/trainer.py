@@ -18,6 +18,7 @@ from transformers.trainer_utils import SaveStrategy, speed_metrics, has_length
 from transformers.trainer_pt_utils import find_batch_size, EvalLoopContainer
 
 from tevatron.retriever.trainer import TevatronTrainer
+from tevatron.retriever.gc_trainer import split_dense_inputs, get_dense_rep
 
 from torch.utils.data import BatchSampler, ConcatDataset, DataLoader, RandomSampler
 from sentence_transformers.sampler import (
@@ -147,6 +148,29 @@ class MAdaptorTrainer(TevatronTrainer):
         self.is_ddp = dist.is_initialized()
         self._dist_loss_scale_factor = dist.get_world_size() if self.is_ddp else 1
         self.other_losses = defaultdict(lambda: torch.tensor(0.0).to(self.args.device))
+        # self.grad_cache = False
+        # if args.grad_cache:
+        #     try:
+        #         from grad_cache import GradCache
+        #         _grad_cache_available = True
+        #     except ModuleNotFoundError:
+        #         _grad_cache_available = False
+        #     if not _grad_cache_available:
+        #         raise ValueError(
+        #             'Grad Cache package not available. You can obtain it from https://github.com/luyug/GradCache.')
+                
+        #     self.grad_cache = True
+
+        #     self.gc = GradCache(
+        #         models=[self.model, self.model],
+        #         chunk_sizes=[self.args.gc_q_chunk_size, self.args.gc_p_chunk_size],
+        #         loss_fn=loss_fn,
+        #         split_input_fn=split_dense_inputs,
+        #         get_rep_fn=get_dense_rep,
+        #         fp16=self.args.fp16,
+        #         scaler=self.scaler if self.args.fp16 else None
+        #     )
+                
 
     def _save(self, output_dir: Optional[str] = None, state_dict=None):
         # If we are executing this function, we are the process zero, so we don't check for that.
@@ -204,9 +228,11 @@ class MAdaptorTrainer(TevatronTrainer):
 
     def eval_step(self, model, inputs):
         query, passage = inputs
-        q_reps = model.encode_query(query) if query else None
-
-        p_reps = model.encode_passage(passage) if passage else None
+        # (q_collated_list, query_temporal_token_spans_list, query_temporal_tokens_input_ids_list), (d_collated_list, passage_temporal_token_spans_list, passage_temporal_tokens_input_ids_list, torch.as_tensor([temporal_query_type_class_id[x] for x in all_passages_temporal_query_type_list_str]), torch.as_tensor([allen_relation_class_id[x] for x in all_passages_allen_relation_list_str]))
+        
+        with torch.autocast('cuda', dtype=torch.bfloat16):
+            q_reps = model.encode_query(query) if query else None
+            p_reps = model.encode_passage(passage) if passage else None
 
         scores_semantic = self.model.compute_similarity(q_reps, p_reps)
 

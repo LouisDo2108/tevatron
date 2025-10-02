@@ -36,51 +36,82 @@ cd /home/thuy0050/code/tevatron
 DATA_ROOT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/data/third_work
 OUTPUT_DIR_ROOT=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron
 
-CHECKPOINT_DIR=Qwen/Qwen3-Embedding-0.6B
+CHECKPOINT_DIR=thenlper/gte-base
 DATA_NAME=temporal_nobel_prize
-MODEL_NAME=zero-shot
+MODEL_NAME=ts-retriever
 BACKBONE=$CHECKPOINT_DIR
-OUTPUT_DIR=$OUTPUT_DIR_ROOT/$DATA_NAME/$MODEL_NAME/$BACKBONE
+EXP_NAME=baseline
+OUTPUT_DIR=$OUTPUT_DIR_ROOT/$DATA_NAME/$MODEL_NAME/$BACKBONE/$EXP_NAME
 
 export WANDB_ENTITY=htluc19
 export WANDB_PROJECT=temporal
 
 mkdir -p $OUTPUT_DIR # Create folder if not exists
 
+# # ==== TRAIN RETRIEVER ====
+# python src/tevatron/retriever/driver/train.py \
+#   --do_train \
+#   --pooling avg \
+#   --bf16 \
+#   --normalize \
+#   --train_group_size 2 \
+#   --per_device_train_batch_size 256 \
+#   --learning_rate 1e-4 \
+#   --temperature 0.02 \
+#   --logging_steps 10 \
+#   --num_train_epochs 10 \
+#   --gradient_accumulation_steps 2 \
+#   --lora \
+#   --lora_r 4 \
+#   --lora_alpha 16 \
+#   --lora_target_modules all-linear \
+#   --attn_implementation sdpa \
+#   --dataset_name $DATA_ROOT_DIR/tevatron/Tevatron___msmarco-passage  \
+#   --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/train.jsonl \
+#   --eval_dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/dev.jsonl \
+#   --model_name_or_path $CHECKPOINT_DIR \
+#   --run_name $BACKBONE\_$EXP_NAME \
+#   --output_dir $OUTPUT_DIR \
+#   --report_to wandb \
+#   --passage_prefix ""
+
+# # --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/train.jsonl \
+# # --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/enhanced_temporal/v4/train.jsonl \
+
 # ==== ENCODE CORPUS ====
 python src/tevatron/retriever/driver/encode.py \
   --per_device_eval_batch_size 512 \
-  --passage_max_len 8192 \
-  --pooling last \
+  --passage_max_len 512 \
+  --pooling avg \
   --bf16 \
   --normalize \
   --attn_implementation sdpa \
   --dataset_name LouisDo2108/temporal-nobel-prize \
   --dataset_config corpus \
   --encode_output_path $OUTPUT_DIR/corpus_emb.pkl \
-  --model_name_or_path $CHECKPOINT_DIR \
+  --model_name_or_path $OUTPUT_DIR \
+  --lora_name_or_path $OUTPUT_DIR \
   --overwrite_output_dir \
-  --query_prefix "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:" \
-  --passage_prefix "" \
-  --padding_side left
+  --query_prefix "" \
+  --passage_prefix ""
 
 # ==== ENCODE QUERIES ==== 
 python src/tevatron/retriever/driver/encode.py \
   --per_device_eval_batch_size 512 \
-  --query_max_len 8192 \
-  --pooling last \
+  --query_max_len 512 \
+  --pooling avg \
   --bf16 \
   --normalize \
   --attn_implementation sdpa \
   --encode_is_query \
   --dataset_name LouisDo2108/temporal-nobel-prize \
   --dataset_config query \
-  --model_name_or_path $CHECKPOINT_DIR \
+  --model_name_or_path $OUTPUT_DIR \
+  --lora_name_or_path $OUTPUT_DIR \
   --encode_output_path $OUTPUT_DIR/queries_emb.pkl \
   --overwrite_output_dir \
-  --query_prefix "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:" \
-  --passage_prefix "" \
-  --padding_side left
+  --query_prefix "" \
+  --passage_prefix ""
 
 # ==== RETRIEVAL ====  
 set -f && OMP_NUM_THREADS=12 python -m tevatron.retriever.driver.search \
@@ -115,10 +146,9 @@ python -m pyserini.eval.trec_eval -c \
 #   $OUTPUT_DIR/rank.msmarco
 
 python louis/beir_scripts/eval_nanobeir_with_sbert.py \
-    --model_name_or_path $CHECKPOINT_DIR \
-    --nanobeir_datasets NQ \
-    --pooling lasttoken \
-    --bf16 \
-    --max_seq_length 8192 \
-    --query_prompts "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:" \
-    --corpus_prompts ""
+  --model_name_or_path $OUTPUT_DIR \
+  --nanobeir_datasets NQ \
+  --pooling mean \
+  --bf16 \
+  --query_prompts "" \
+  --corpus_prompts ""

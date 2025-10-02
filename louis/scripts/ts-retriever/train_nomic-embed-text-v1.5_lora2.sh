@@ -22,7 +22,9 @@ source ~/.bashrc
 conda activate tevatron
 
 export CUDA_VISIBLE_DEVICES=0
-export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:256
+# export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export PYTORCH_CUDA_ALLOC_CONF=garbage_collection_threshold:0.6
 # export TQDM_DISABLE=1 # Avoid logging tqdm progress bars
 # export TORCH_USE_CUDA_DSA=0 # Set to 1 only if debugging
 # export CUDA_LAUNCH_BLOCKING=0 # Set to 1 only if debugging
@@ -34,60 +36,49 @@ cd /home/thuy0050/code/tevatron
 DATA_ROOT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/data/third_work
 OUTPUT_DIR_ROOT=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron
 
+CHECKPOINT_DIR=nomic-ai/nomic-embed-text-v1.5
 DATA_NAME=temporal_nobel_prize
 MODEL_NAME=ts-retriever
-BACKBONE=contriever
-EXP_NAME=ts-dev-remove-only-temporal-answers-add
+BACKBONE=$CHECKPOINT_DIR
+EXP_NAME=baseline-our-dataset
 OUTPUT_DIR=$OUTPUT_DIR_ROOT/$DATA_NAME/$MODEL_NAME/$BACKBONE/$EXP_NAME
-
-CHECKPOINT_DIR=facebook/contriever
 
 export WANDB_ENTITY=htluc19
 export WANDB_PROJECT=temporal
 
 mkdir -p $OUTPUT_DIR # Create folder if not exists
 
-# negative_size = self.data_args.train_group_size - 1
-# lora target modules for contriever: query,key,value,dense,word_embeddings,position_embeddings
+# # ==== TRAIN RETRIEVER ====
+# python src/tevatron/retriever/driver/train.py \
+#   --do_train \
+#   --pooling avg \
+#   --bf16 \
+#   --normalize \
+#   --train_group_size 2 \
+#   --per_device_train_batch_size 256 \
+#   --learning_rate 1e-4 \
+#   --temperature 0.02 \
+#   --logging_steps 10 \
+#   --num_train_epochs 10 \
+#   --gradient_accumulation_steps 2 \
+#   --lora \
+#   --lora_r 4 \
+#   --lora_alpha 16 \
+#   --lora_target_modules all-linear \
+#   --attn_implementation sdpa \
+#   --query_prefix "search_document:" \
+#   --passage_prefix "search query:" \
+#   --dataset_name $DATA_ROOT_DIR/tevatron/Tevatron___msmarco-passage  \
+#   --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/enhanced_temporal/v4/train.jsonl \
+#   --eval_dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/dev.jsonl \
+#   --model_name_or_path $CHECKPOINT_DIR \
+#   --run_name $BACKBONE\_$EXP_NAME \
+#   --output_dir $OUTPUT_DIR \
+#   --report_to wandb
 
-# ==== TRAIN RETRIEVER ====
-python louis/madaptor/train_temporal.py \
-  --do_train \
-  --pooling avg \
-  --bf16 \
-  --train_group_size 8 \
-  --per_device_train_batch_size 256 \
-  --learning_rate 1e-4 \
-  --temperature 0.05 \
-  --logging_steps 10 \
-  --num_train_epochs 5 \
-  --gradient_accumulation_steps 1 \
-  --lora \
-  --lora_r 4 \
-  --lora_alpha 16 \
-  --lora_target_modules all-linear \
-  --modules_to_save temporal_projector \
-  --dataset_name $DATA_ROOT_DIR/tevatron/Tevatron___msmarco-passage  \
-  --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/enhanced_temporal/v3/train_longer_than_5.jsonl \
-  --eval_dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/dev.jsonl \
-  --model_name_or_path $CHECKPOINT_DIR \
-  --run_name $BACKBONE\_$EXP_NAME \
-  --output_dir $OUTPUT_DIR \
-  --report_to none \
-  --matryoshka \
-  --truncated_normalize \
-  --filter_false_negatives \
-  --temporal \
-  --temporal_reconstruction \
-  --kl_loss
+# # --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/train.jsonl \
+# # --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/enhanced_temporal/v4/train.jsonl \
 
-# --dataset_path Modify inside the code
-# data_args.dataset_path = {
-#     "train": "$DATA_ROOT_DIR/temporal/nobel_prize/train/train.jsonl",
-#     "dev": "$DATA_ROOT_DIR/temporal/nobel_prize/train/dev.jsonl",
-# }
-
-# # Scaled Dot Product Attention, for BERT
 # # ==== ENCODE CORPUS ====
 # python src/tevatron/retriever/driver/encode.py \
 #   --per_device_eval_batch_size 512 \
@@ -101,8 +92,9 @@ python louis/madaptor/train_temporal.py \
 #   --encode_output_path $OUTPUT_DIR/corpus_emb.pkl \
 #   --model_name_or_path $OUTPUT_DIR \
 #   --lora_name_or_path $OUTPUT_DIR \
-#   --overwrite_output_dir
-
+#   --overwrite_output_dir \
+#   --query_prefix "search_query:" \
+#   --passage_prefix "search_document:"
 
 # # ==== ENCODE QUERIES ==== 
 # python src/tevatron/retriever/driver/encode.py \
@@ -118,7 +110,9 @@ python louis/madaptor/train_temporal.py \
 #   --model_name_or_path $OUTPUT_DIR \
 #   --lora_name_or_path $OUTPUT_DIR \
 #   --encode_output_path $OUTPUT_DIR/queries_emb.pkl \
-#   --overwrite_output_dir
+#   --overwrite_output_dir \
+#   --query_prefix "search_query:" \
+#   --passage_prefix "search_document:"
 
 # # ==== RETRIEVAL ====  
 # set -f && OMP_NUM_THREADS=12 python -m tevatron.retriever.driver.search \
@@ -152,8 +146,10 @@ python louis/madaptor/train_temporal.py \
 # #   $DATA_ROOT_DIR/temporal/temporal_nobel_prize/test/qrel.txt \
 # #   $OUTPUT_DIR/rank.msmarco
 
-# python louis/beir_scripts/eval_nanobeir_with_sbert.py \
-#     --model_name_or_path $OUTPUT_DIR \
-#     --nanobeir_datasets NQ \
-#     --pooling mean \
-#     --bf16
+python louis/beir_scripts/eval_nanobeir_with_sbert.py \
+  --model_name_or_path $OUTPUT_DIR \
+  --nanobeir_datasets NQ \
+  --pooling mean \
+  --bf16 \
+  --query_prompts "search_query:" \
+  --corpus_prompts "search_document:"

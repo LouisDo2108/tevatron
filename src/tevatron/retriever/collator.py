@@ -45,6 +45,7 @@ class TrainCollator:
             return_tensors="pt",
             return_token_type_ids=False,
             add_special_tokens=True,
+            padding_side=self.data_args.padding_side,
         )
         d_collated = self.tokenizer(
             all_passages,
@@ -60,6 +61,7 @@ class TrainCollator:
             return_tensors="pt",
             return_token_type_ids=False,
             add_special_tokens=True,
+            padding_side=self.data_args.padding_side,
         )
 
         # if self.data_args.append_eos_token:
@@ -225,6 +227,7 @@ class EncodeCollator:
             return_attention_mask=True,
             return_token_type_ids=False,
             add_special_tokens=True,
+            padding_side=self.data_args.padding_side
         )
         # if self.data_args.append_eos_token:
         #     collated_inputs['input_ids'] = [x + [self.tokenizer.eos_token_id] for x in collated_inputs['input_ids']]
@@ -319,6 +322,7 @@ class VllmEncodeCollator(EncodeCollator):
             return_attention_mask=False,
             return_token_type_ids=False,
             add_special_tokens=True,
+            padding_side=self.data_args.padding_side,
         )
         if self.data_args.append_eos_token:
             collated_texts['input_ids'] = [x + [self.tokenizer.eos_token_id] for x in collated_texts['input_ids']]

@@ -74,7 +74,7 @@ class ModelArguments:
 
     # for Jax training
     dtype: Optional[str] = field(
-        default="float32",
+        default="bfloat16",
         metadata={
             "help": "Floating-point format in which the model weights should be initialized and trained. Choose one "
                     "of `[float32, float16, bfloat16]`. "
@@ -217,9 +217,6 @@ class DataArguments:
         default='right',
         metadata={"help": "padding side for the tokenizer, can be 'left' or 'right'"}
     )
-    query_instruction: str = field(
-        default="",
-    )
     eval_dataset_path: str = field(default=None)  # type:ignore
 
 
@@ -272,9 +269,9 @@ class TevatronTrainingArguments(TrainingArguments):
     kl_loss: bool = field(default=False)
 
     # For evaluation
-    # eval_on_start: bool = field(default=True)
-    # eval_strategy: str = field(default="epoch")
-    # save_strategy: str = field(default="best")
-    # load_best_model_at_end: bool = field(default=True)
-    # prediction_loss_only: bool = field(default=True)
-    # per_device_eval_batch_size: int = field(default=128)
+    eval_on_start: bool = field(default=False)
+    eval_strategy: str = field(default="epoch")
+    save_strategy: str = field(default="best")
+    load_best_model_at_end: bool = field(default=True)
+    prediction_loss_only: bool = field(default=True)
+    per_device_eval_batch_size: int = field(default=512)
