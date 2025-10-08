@@ -37,7 +37,7 @@ DATA_ROOT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/data/third_work
 OUTPUT_DIR_ROOT=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron
 
 CHECKPOINT_DIR=facebook/contriever
-DATA_NAME=temporal_nobel_prize
+DATA_NAME=timesensitiveqa
 MODEL_NAME=tempretriever
 BACKBONE=$CHECKPOINT_DIR
 EXP_NAME=baseline
@@ -49,7 +49,7 @@ export WANDB_PROJECT=temporal
 mkdir -p $OUTPUT_DIR # Create folder if not exists
 
 # ==== TRAIN RETRIEVER ====
-python src/tevatron/retriever/driver/train.py \
+python /home/thuy0050/code/tevatron/louis/madaptor/train_tempretriever.py \
   --do_train \
   --pooling cls \
   --bf16 \
@@ -62,13 +62,13 @@ python src/tevatron/retriever/driver/train.py \
   --gradient_accumulation_steps 1 \
   --attn_implementation sdpa \
   --dataset_name $DATA_ROOT_DIR/tevatron/Tevatron___msmarco-passage  \
-  --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/train.jsonl \
-  --eval_dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/dev.jsonl \
+  --dataset_path $DATA_ROOT_DIR/temporal/explitcit/time-sensitive-qa/train.jsonl \
   --model_name_or_path $CHECKPOINT_DIR \
   --run_name $BACKBONE\_$EXP_NAME \
   --output_dir $OUTPUT_DIR \
   --report_to none \
-  --passage_prefix ""
+  --passage_prefix "" \
+  --kl_loss
 
 
 # # ==== ENCODE CORPUS ====

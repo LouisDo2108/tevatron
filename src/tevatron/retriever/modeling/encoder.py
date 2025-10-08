@@ -52,7 +52,10 @@ class EncoderModel(nn.Module):
         if self.is_ddp:
             self.process_rank = dist.get_rank()
             self.world_size = dist.get_world_size()
-            
+        self.matryoshka_dim = None
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        # For KL loss
         self.base_model = base_model
         if self.base_model is not None:
             for name, param in self.base_model.named_parameters():
@@ -131,7 +134,7 @@ class EncoderModel(nn.Module):
             **hf_kwargs,
     ):  
         base_model = cls.try_using_flash_attn(model_args.model_name_or_path, hf_kwargs)
-            
+
         if train_args.kl_loss:
             kl_loss_base_model = deepcopy(base_model)
         else:
@@ -184,6 +187,7 @@ class EncoderModel(nn.Module):
                 normalize=model_args.normalize,
                 temperature=model_args.temperature,
                 training_args=train_args,
+                base_model=kl_loss_base_model if train_args.kl_loss else None,
             )
         return model
 
@@ -209,7 +213,7 @@ class EncoderModel(nn.Module):
             logger.warning("Either your model is not a PEFT-model or you are missing the lora_name_or_path argument.")
             logger.info("Consider your model as a normal model.")
             lora_config = None
-            
+
         if lora_config is not None:
             logger.info(" Loaded LORA config!!! ")
             base_model = cls.try_using_flash_attn(lora_config.base_model_name_or_path, hf_kwargs)
@@ -232,7 +236,6 @@ class EncoderModel(nn.Module):
                 pooling=pooling,
                 normalize=normalize
             )
-
         # print("Please provide lora_name_or_path to load the PEFT model correctly!!!")
         return model
 
@@ -248,7 +251,7 @@ class EncoderModel(nn.Module):
                 )
             logger.info("Using flash attention 2!")
         except Exception as e:
-            logger.exception(e)
+            # logger.exception(e)
             hf_kwargs["attn_implementation"] = "sdpa"
             base_model = cls.TRANSFORMER_CLS.from_pretrained(
                     model_name_or_path, 
@@ -257,10 +260,10 @@ class EncoderModel(nn.Module):
                     **hf_kwargs
                 )
             logger.info(f"Fall back to use {hf_kwargs['attn_implementation']}")
-            
+
         if base_model.config.pad_token_id is None:
             base_model.config.pad_token_id = 0
-            
+
         return base_model
 
     def save(self, output_dir: str):

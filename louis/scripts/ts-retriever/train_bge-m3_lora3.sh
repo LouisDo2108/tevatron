@@ -36,8 +36,8 @@ cd /home/thuy0050/code/tevatron
 DATA_ROOT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/data/third_work
 OUTPUT_DIR_ROOT=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron
 
-CHECKPOINT_DIR=BAAI/bge-base-en-v1.5
-DATA_NAME=temporal_nobel_prize
+CHECKPOINT_DIR=BAAI/bge-m3
+DATA_NAME=timesensitiveqa
 MODEL_NAME=ts-retriever
 BACKBONE=$CHECKPOINT_DIR
 EXP_NAME=baseline
@@ -48,35 +48,35 @@ export WANDB_PROJECT=temporal
 
 mkdir -p $OUTPUT_DIR # Create folder if not exists
 
-# # ==== TRAIN RETRIEVER ====
-# python src/tevatron/retriever/driver/train.py \
-#   --do_train \
-#   --pooling cls \
-#   --bf16 \
-#   --normalize \
-#   --train_group_size 2 \
-#   --per_device_train_batch_size 256 \
-#   --learning_rate 1e-4 \
-#   --temperature 0.02 \
-#   --logging_steps 10 \
-#   --num_train_epochs 10 \
-#   --gradient_accumulation_steps 2 \
-#   --lora \
-#   --lora_r 4 \
-#   --lora_alpha 16 \
-#   --lora_target_modules all-linear \
-#   --attn_implementation sdpa \
-#   --dataset_name $DATA_ROOT_DIR/tevatron/Tevatron___msmarco-passage  \
-#   --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/train.jsonl \
-#   --eval_dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/dev.jsonl \
-#   --model_name_or_path $CHECKPOINT_DIR \
-#   --run_name $BACKBONE\_$EXP_NAME \
-#   --output_dir $OUTPUT_DIR \
-#   --report_to wandb \
-#   --passage_prefix "Represent this sentence for searching relevant passages: "
+# ==== TRAIN RETRIEVER ====
+python src/tevatron/retriever/driver/train.py \
+  --do_train \
+  --pooling cls \
+  --bf16 \
+  --normalize \
+  --train_group_size 2 \
+  --per_device_train_batch_size 512 \
+  --learning_rate 1e-4 \
+  --temperature 0.02 \
+  --logging_steps 10 \
+  --num_train_epochs 10 \
+  --gradient_accumulation_steps 1 \
+  --lora \
+  --lora_r 4 \
+  --lora_alpha 16 \
+  --lora_target_modules all-linear \
+  --attn_implementation sdpa \
+  --passage_prefix "" \
+  --dataset_name $DATA_ROOT_DIR/tevatron/Tevatron___msmarco-passage  \
+  --dataset_path $DATA_ROOT_DIR/temporal/explitcit/time-sensitive-qa/train.jsonl \
+  --model_name_or_path $CHECKPOINT_DIR \
+  --run_name $BACKBONE\_$EXP_NAME \
+  --output_dir $OUTPUT_DIR \
+  --report_to wandb \
+  --gradient_checkpointing
 
-# # --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/train.jsonl \
-# # --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/enhanced_temporal/v4/train.jsonl \
+# --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/train.jsonl \
+# --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/enhanced_temporal/v4/train.jsonl \
 
 # ==== ENCODE CORPUS ====
 python src/tevatron/retriever/driver/encode.py \
@@ -88,13 +88,13 @@ python src/tevatron/retriever/driver/encode.py \
   --attn_implementation sdpa \
   --dataset_name LouisDo2108/temporal-nobel-prize \
   --dataset_config corpus \
+  --dataset_path $DATA_ROOT_DIR/temporal/explitcit/time-sensitive-qa/test/corpus.jsonl \
   --encode_output_path $OUTPUT_DIR/corpus_emb.pkl \
   --model_name_or_path $OUTPUT_DIR \
   --lora_name_or_path $OUTPUT_DIR \
   --overwrite_output_dir \
-  --query_prefix "Represent this sentence for searching relevant passages: " \
-  --passage_prefix "" \
-  --matryoshka_dim 768
+  --query_prefix "" \
+  --passage_prefix ""
 
 # ==== ENCODE QUERIES ==== 
 python src/tevatron/retriever/driver/encode.py \
@@ -107,13 +107,12 @@ python src/tevatron/retriever/driver/encode.py \
   --encode_is_query \
   --dataset_name LouisDo2108/temporal-nobel-prize \
   --dataset_config query \
+  --dataset_path $DATA_ROOT_DIR/temporal/explitcit/time-sensitive-qa/test/query.jsonl \
   --model_name_or_path $OUTPUT_DIR \
   --lora_name_or_path $OUTPUT_DIR \
   --encode_output_path $OUTPUT_DIR/queries_emb.pkl \
   --overwrite_output_dir \
-  --query_prefix "Represent this sentence for searching relevant passages: " \
-  --passage_prefix "" \
-  --matryoshka_dim 768
+  --query_prefix ""
 
 # ==== RETRIEVAL ====  
 set -f && OMP_NUM_THREADS=12 python -m tevatron.retriever.driver.search \
@@ -134,7 +133,7 @@ python -m tevatron.utils.format.convert_result_to_trec \
 # Note that the M here will set the @k (i.e., @M) of mrr and map, by default, if not set, M=100
 python -m pyserini.eval.trec_eval -c \
   -mP.10 -mrecall.10 -mndcg_cut.10 -M 10 -mrecip_rank -mmap \
-  $DATA_ROOT_DIR/temporal/temporal_nobel_prize/test/qrel.txt \
+  $DATA_ROOT_DIR/temporal/explitcit/time-sensitive-qa/test/qrel.txt \
   $OUTPUT_DIR/rank.trec
 
 # # ==== CONVERT TO MSMARCO FORMAT ====  
@@ -152,6 +151,5 @@ python louis/beir_scripts/eval_nanobeir_with_sbert.py \
   --nanobeir_datasets NQ \
   --pooling cls \
   --bf16 \
-  --query_prompts "Represent this sentence for searching relevant passages: " \
-  --corpus_prompts "" \
-  --matryoshka_dim 768
+  --query_prompts "" \
+  --corpus_prompts ""

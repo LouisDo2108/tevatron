@@ -1,15 +1,7 @@
 from dataclasses import dataclass, field
-from typing import Optional, List
-
-from transformers.training_args import TrainingArguments
-
-from transformers.utils import ExplicitEnum
-
-from sentence_transformers.sampler import (
-    DefaultBatchSampler,
-    MultiDatasetDefaultBatchSampler,
-)
+from typing import List, Optional
 from sentence_transformers.training_args import BatchSamplers, MultiDatasetBatchSamplers
+from transformers.training_args import TrainingArguments
 
 
 @dataclass
@@ -82,10 +74,7 @@ class ModelArguments:
     )
 
     attn_implementation: Optional[str] = field(
-        default="flash_attention_2",
-        metadata={
-            "help": 'The attention implementation to use in the model (if relevant). Can be any of `"eager"` (manual implementation of the attention), `"sdpa"` (using [`F.scaled_dot_product_attention`](https://pytorch.org/docs/master/generated/torch.nn.functional.scaled_dot_product_attention.html)), or `"flash_attention_2"` (using [Dao-AILab/flash-attention](https://github.com/Dao-AILab/flash-attention)).'
-        },
+        default="sdpa",
     )
 
 
@@ -253,16 +242,26 @@ class TevatronTrainingArguments(TrainingArguments):
         default=MultiDatasetBatchSamplers.PROPORTIONAL,
     )
     modules_to_save: List[str] = field(default_factory=lambda: [])
-    
+
     # madaptor specific
-    matryoshka: bool = field(default=False) # This will enable the loss for semantic matryoshka embeddings (512-768)
-    temporal: bool = field(default=False) # This will enable the loss for the temporal embedding subspace.
-    
+    # matryoshka: bool = field(default=False) # This will enable the loss for semantic matryoshka embeddings (512-768)
+
     # Following flags will be considered if the temporal flag is true
-    temporal_as_sentence: bool = field(default=False)
-    extracted_temporal: bool = field(default=False)
+    # temporal_as_sentence: bool = field(default=False)
+    # extracted_temporal: bool = field(default=False)
+
+    matryoshka_dim: int = field(default=768)
+
+    # This will enable the loss for the temporal embedding subspace.
+    temporal: bool = field(default=False)  
     temporal_reconstruction: bool = field(default=False)
-    
+    temporal_dim: int = field(default=64)
+    max_temporal_length: int = field(default=16)
+    qt: float = field(default=0.0)
+    pt: float = field(default=0.0)
+    qt_recon: float = field(default=0.0)
+    pt_recon: float = field(default=0.0)
+
     # Others to improve the performance
     filter_false_negatives: bool = field(default=False)
     truncated_normalize: bool = field(default=False)

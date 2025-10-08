@@ -1,6 +1,5 @@
 import logging
 import os
-import sys
 from copy import deepcopy
 from dataclasses import asdict
 from pathlib import Path
@@ -8,9 +7,9 @@ from pdb import set_trace as st
 
 import numpy as np
 import wandb
-from collator import TemporalCollator, TemporalReconCollator
+from collator import TempRetrieverCollator
 from dataset import TemporalDataset
-from madaptor import TemporalProjectorReconstruction
+from madaptor import TempRetriever
 from trainer import MAdaptorTrainer as Trainer
 from transformers import AutoConfig, AutoTokenizer
 from utils import get_params_info, init, write_json
@@ -29,12 +28,29 @@ logger = logging.getLogger(__name__)
 # }
 
 
-# def select_collators_and_models(model_args, data_args, training_args):
+def get_params_info(model):
+    all_param = 0
+    trainable_param = 0
 
+    print("\nAll trainable parameters:")
+    for name, param in model.named_parameters():
+        all_param += param.numel()
+
+        if param.requires_grad:
+            trainable_param += param.numel()
+            print(name, param.numel())
+
+    print(
+        f"trainable params: {trainable_param:,} || all params: {all_param:,} || trainable%: {trainable_param / all_param * 100:.2f}"
+    )
+
+
+# def select_collators_and_models(model_args, data_args, training_args):
+    
 #     # Check if this is normal TS-Retriever style training
 #     if not training_args.matryoshka:
 #         return collator_dict["tevatron_standard"], DenseModel
-
+    
 #     if training_args.temporal:
 #         if training_args.temporal_as_sentence:
 #             return collator_dict["temporal_as_sentence"], NaiveTemporal
@@ -47,20 +63,12 @@ logger = logging.getLogger(__name__)
 #     else:
 #         # Only semantic matryoshka
 #         return collator_dict["tevatron_standard"], NaiveTemporal
-# TrainCollator, Model = select_collators_and_models(model_args, data_args, training_args)
-# model = Model.build(
-#     model_args,
-#     training_args,
-#     torch_dtype=default_config.torch_dtype,
-#     cache_dir=model_args.cache_dir,
-#     attn_implementation=model_args.attn_implementation,
-# )
 
-# train_dataset = TrainDataset(data_args)
-# collator = TrainCollator(data_args, tokenizer)
 
 def main():
     model_args, data_args, training_args = init()
+
+    # TrainCollator, Model = select_collators_and_models(model_args, data_args, training_args)
 
     default_config = AutoConfig.from_pretrained(model_args.model_name_or_path, trust_remote_code=True)
     tokenizer = AutoTokenizer.from_pretrained(
@@ -80,8 +88,31 @@ def main():
     else:
         tokenizer.padding_side = "left"
 
+    # model = Model.build(
+    #     model_args,
+    #     training_args,
+    #     torch_dtype=default_config.torch_dtype,
+    #     cache_dir=model_args.cache_dir,
+    #     attn_implementation=model_args.attn_implementation,
+    # )
+
+    # train_dataset = TrainDataset(data_args)
+    # collator = TrainCollator(data_args, tokenizer)
+
+    model = TempRetriever.build(
+        model_args,
+        training_args,
+        cache_dir=model_args.cache_dir,
+        torch_dtype=default_config.torch_dtype,
+        attn_implementation=model_args.attn_implementation,
+    )
+    for k, v in model.named_parameters():
+        v.requires_grad = True
+
+    get_params_info(model)
+
     train_dataset = TemporalDataset(data_args)
-    collator = TemporalReconCollator(data_args, tokenizer)
+    collator = TempRetrieverCollator(data_args, tokenizer)
 
     eval_dataset = None
     if data_args.eval_dataset_path is not None:
@@ -94,14 +125,7 @@ def main():
         training_args.save_strategy = "epoch"
         training_args.load_best_model_at_end = False
 
-    model = TemporalProjectorReconstruction.build(
-        model_args,
-        training_args,
-        cache_dir=model_args.cache_dir,
-        torch_dtype=default_config.torch_dtype,
-        attn_implementation=model_args.attn_implementation,
-    )
-    get_params_info(model)
+    logger.info(f"Using {collator} collator and {model} model")
 
     trainer_cls = GCTrainer if training_args.grad_cache else Trainer
     trainer = trainer_cls(

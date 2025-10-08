@@ -169,12 +169,18 @@ def main():
 
     train_dataset = TrainDataset(data_args)
     collator = TrainCollator(data_args, tokenizer)
-    
-    eval_data_args = deepcopy(data_args)
-    eval_data_args.dataset_path = data_args.eval_dataset_path
-    eval_data_args.dataset_split = "eval"
-    eval_dataset = TrainDataset(data_args)
-    
+
+    eval_dataset = None
+    if data_args.eval_dataset_path is not None:
+        eval_data_args = deepcopy(data_args)
+        eval_data_args.dataset_path = data_args.eval_dataset_path
+        eval_data_args.dataset_split = "eval"
+        eval_dataset = TrainDataset(data_args)
+    else:
+        training_args.eval_strategy = "no"
+        training_args.save_strategy = "epoch"
+        training_args.load_best_model_at_end = False
+
     logger.info(f"Using {TrainCollator} collator and {model} model")
 
     trainer_cls = GCTrainer if training_args.grad_cache else Trainer
@@ -186,7 +192,9 @@ def main():
         data_collator=collator,
     )
     train_dataset.set_trainer(trainer)
-    eval_dataset.set_trainer(trainer)
+
+    if eval_dataset is not None:
+        eval_dataset.set_trainer(trainer)
 
     last_checkpoint = None
     # if os.path.isdir(training_args.output_dir):

@@ -38,9 +38,9 @@ OUTPUT_DIR_ROOT=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron
 
 CHECKPOINT_DIR=BAAI/bge-base-en-v1.5
 DATA_NAME=temporal_nobel_prize
-MODEL_NAME=ts-retriever
+MODEL_NAME=temporal
 BACKBONE=$CHECKPOINT_DIR
-EXP_NAME=baseline
+EXP_NAME=matryoshka_64-128-256-512-768
 OUTPUT_DIR=$OUTPUT_DIR_ROOT/$DATA_NAME/$MODEL_NAME/$BACKBONE/$EXP_NAME
 
 export WANDB_ENTITY=htluc19
@@ -49,7 +49,7 @@ export WANDB_PROJECT=temporal
 mkdir -p $OUTPUT_DIR # Create folder if not exists
 
 # # ==== TRAIN RETRIEVER ====
-# python src/tevatron/retriever/driver/train.py \
+# python louis/madaptor/train_temporal.py \
 #   --do_train \
 #   --pooling cls \
 #   --bf16 \
@@ -65,18 +65,17 @@ mkdir -p $OUTPUT_DIR # Create folder if not exists
 #   --lora_r 4 \
 #   --lora_alpha 16 \
 #   --lora_target_modules all-linear \
+#   --modules_to_save temporal_projector \
 #   --attn_implementation sdpa \
 #   --dataset_name $DATA_ROOT_DIR/tevatron/Tevatron___msmarco-passage  \
-#   --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/train.jsonl \
+#   --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/enhanced_temporal/v4/train.jsonl \
 #   --eval_dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/dev.jsonl \
 #   --model_name_or_path $CHECKPOINT_DIR \
-#   --run_name $BACKBONE\_$EXP_NAME \
+#   --run_name temporal\_$BACKBONE\_$EXP_NAME \
 #   --output_dir $OUTPUT_DIR \
+#   --dataloader_num_workers 0 \
 #   --report_to wandb \
 #   --passage_prefix "Represent this sentence for searching relevant passages: "
-
-# # --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/train.jsonl \
-# # --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/enhanced_temporal/v4/train.jsonl \
 
 # ==== ENCODE CORPUS ====
 python src/tevatron/retriever/driver/encode.py \
@@ -94,7 +93,7 @@ python src/tevatron/retriever/driver/encode.py \
   --overwrite_output_dir \
   --query_prefix "Represent this sentence for searching relevant passages: " \
   --passage_prefix "" \
-  --matryoshka_dim 768
+  --matryoshka_dim 256
 
 # ==== ENCODE QUERIES ==== 
 python src/tevatron/retriever/driver/encode.py \
@@ -113,10 +112,10 @@ python src/tevatron/retriever/driver/encode.py \
   --overwrite_output_dir \
   --query_prefix "Represent this sentence for searching relevant passages: " \
   --passage_prefix "" \
-  --matryoshka_dim 768
+  --matryoshka_dim 256
 
 # ==== RETRIEVAL ====  
-set -f && OMP_NUM_THREADS=12 python -m tevatron.retriever.driver.search \
+set -f && OMP_NUM_THREADS=12 python louis/madaptor/search.py \
     --query_reps $OUTPUT_DIR/queries_emb.pkl \
     --passage_reps $OUTPUT_DIR/corpus_emb.pkl \
     --depth 100 \
@@ -148,10 +147,10 @@ python -m pyserini.eval.trec_eval -c \
 #   $OUTPUT_DIR/rank.msmarco
 
 python louis/beir_scripts/eval_nanobeir_with_sbert.py \
-  --model_name_or_path $OUTPUT_DIR \
-  --nanobeir_datasets NQ \
-  --pooling cls \
-  --bf16 \
-  --query_prompts "Represent this sentence for searching relevant passages: " \
-  --corpus_prompts "" \
-  --matryoshka_dim 768
+    --model_name_or_path $OUTPUT_DIR \
+    --nanobeir_datasets NQ \
+    --pooling cls \
+    --bf16 \
+    --query_prompts "Represent this sentence for searching relevant passages: " \
+    --corpus_prompts "" \
+    --matryoshka_dim 256

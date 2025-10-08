@@ -40,7 +40,7 @@ CHECKPOINT_DIR=BAAI/bge-base-en-v1.5
 DATA_NAME=temporal_nobel_prize
 MODEL_NAME=temporal
 BACKBONE=$CHECKPOINT_DIR
-EXP_NAME=matryoshka_qtpt
+EXP_NAME=dev
 OUTPUT_DIR=$OUTPUT_DIR_ROOT/$DATA_NAME/$MODEL_NAME/$BACKBONE/$EXP_NAME
 
 export WANDB_ENTITY=htluc19
@@ -48,38 +48,43 @@ export WANDB_PROJECT=temporal
 
 mkdir -p $OUTPUT_DIR # Create folder if not exists
 
-# ==== TRAIN RETRIEVER ====
-python louis/madaptor/train_temporal.py \
-  --do_train \
-  --pooling cls \
-  --bf16 \
-  --normalize \
-  --train_group_size 2 \
-  --per_device_train_batch_size 256 \
-  --learning_rate 1e-4 \
-  --temperature 0.02 \
-  --logging_steps 10 \
-  --num_train_epochs 10 \
-  --gradient_accumulation_steps 2 \
-  --lora \
-  --lora_r 4 \
-  --lora_alpha 16 \
-  --lora_target_modules all-linear \
-  --modules_to_save temporal_projector \
-  --attn_implementation sdpa \
-  --dataset_name $DATA_ROOT_DIR/tevatron/Tevatron___msmarco-passage  \
-  --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/enhanced_temporal/v4/train.jsonl \
-  --eval_dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/dev.jsonl \
-  --model_name_or_path $CHECKPOINT_DIR \
-  --run_name $BACKBONE\_$EXP_NAME \
-  --output_dir $OUTPUT_DIR \
-  --dataloader_num_workers 0 \
-  --report_to none \
-  --passage_prefix "Represent this sentence for searching relevant passages: " \
-  --temporal 
-  # --kl_loss
-  # --report_to wandb
-  # --filter_false_negatives
+ulimit -n 8192 # To enable num_workers != 0
+
+# # ==== TRAIN RETRIEVER ====
+# python louis/madaptor/train_temporal.py \
+#   --do_train \
+#   --pooling cls \
+#   --bf16 \
+#   --normalize \
+#   --train_group_size 2 \
+#   --per_device_train_batch_size 512 \
+#   --learning_rate 1e-4 \
+#   --temperature 0.02 \
+#   --logging_steps 1 \
+#   --num_train_epochs 10 \
+#   --gradient_accumulation_steps 1 \
+#   --lora \
+#   --lora_r 4 \
+#   --lora_alpha 16 \
+#   --lora_target_modules all-linear \
+#   --modules_to_save temporal_projector \
+#   --attn_implementation sdpa \
+#   --dataset_name $DATA_ROOT_DIR/tevatron/Tevatron___msmarco-passage  \
+#   --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/enhanced_temporal/v4/train.jsonl \
+#   --eval_dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/dev.jsonl \
+#   --model_name_or_path $CHECKPOINT_DIR \
+#   --run_name $BACKBONE\_$EXP_NAME \
+#   --output_dir $OUTPUT_DIR \
+#   --dataloader_num_workers 4 \
+#   --report_to none \
+#   --passage_prefix "Represent this sentence for searching relevant passages: " \
+#   --temporal \
+#   --pt 0.1 \
+#   --qt 0.1 \
+#   --pt_recon 0.1 \
+#   --qt_recon 0.1 \
+#   --filter_false_negatives \
+#   --gradient_checkpointing
 
 # ==== ENCODE CORPUS ====
 python src/tevatron/retriever/driver/encode.py \

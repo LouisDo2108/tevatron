@@ -21,6 +21,25 @@ from tevatron.retriever.modeling import DenseModel, EncoderOutput
 logger = logging.getLogger(__name__)
 
 
+def get_params_info(model):
+    all_param = 0
+    trainable_param = 0
+
+    print("\nAll trainable parameters:")
+    for name, param in model.named_parameters():
+        
+        if name.startswith("base_model."):
+            # This is the duplicate of the base model for KL loss
+           continue 
+        all_param += param.numel()
+        
+        if param.requires_grad:
+            trainable_param += param.numel()
+            print(name, param.numel())
+            
+    print(f"trainable params: {trainable_param:,} || all params: {all_param:,} || trainable%: {trainable_param / all_param * 100:.2f}")
+
+
 def set_seed(seed: int, deterministic: bool = True):
     # Copy from transformers.trainer_utilss.set_seed with some modifications
     """
@@ -99,6 +118,7 @@ def main():
         torch_dtype=torch_dtype,
         attn_implementation=model_args.attn_implementation,
     )
+    model.matryoshka_dim = training_args.matryoshka_dim
 
     encode_dataset = EncodeDataset(
         data_args=data_args,

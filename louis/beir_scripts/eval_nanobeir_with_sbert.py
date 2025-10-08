@@ -32,6 +32,9 @@ def main():
     parser.add_argument(
         "--max_seq_length", type=int, default=512, help="Maximum sequence length."
     )
+    parser.add_argument(
+        "--matryoshka_dim", type=int, default=768, help="Matryoshka dimension"
+    )
 
     args = parser.parse_args()
 
@@ -40,6 +43,8 @@ def main():
 
     if args.pooling == "avg":
         args.pooling = "mean"
+    if args.pooling == "last":
+        args.pooling = "lasttoken"
     print(f"Pooling method: {args.pooling}")
 
     # Load the transformer and SentenceTransformer model
@@ -58,7 +63,6 @@ def main():
         # This is for nomic v1.5
         if not is_there_lora:
             transformer_model.auto_model.load_adapter(args.model_name_or_path)
-        
 
     pooling_model = models.Pooling(
         transformer_model.get_word_embedding_dimension(), pooling_mode=args.pooling
@@ -92,17 +96,18 @@ def main():
             },
             trust_remote_code=True,
         )
-    
+
     args.query_prompts =args.query_prompts.replace("\\n", "\n")
     args.corpus_prompts = args.corpus_prompts.replace("\\n", "\n")
-    
+
     from transformers import AutoTokenizer
 
     # Set up and run the evaluator
     evaluator = NanoBEIREvaluator(
-        dataset_names=args.nanobeir_datasets, 
+        dataset_names=args.nanobeir_datasets,
         query_prompts=args.query_prompts if args.query_prompts else None,
         corpus_prompts=args.corpus_prompts if args.corpus_prompts else None,
+        truncate_dim=args.matryoshka_dim,
     )
     results = evaluator(model)
 

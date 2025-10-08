@@ -216,7 +216,7 @@ class MAdaptorTrainer(TevatronTrainer):
             logs["loss"] = round(
                 tr_loss_scalar
                 / (self.state.global_step - self._globalstep_last_logged),
-                4,
+                2,
             )
             for loss_name, some_loss in self.other_losses.items():
                 some_loss_scalar = self._nested_gather(some_loss).mean().item()
@@ -224,7 +224,7 @@ class MAdaptorTrainer(TevatronTrainer):
                 logs[loss_name] = round(
                     some_loss_scalar
                     / (self.state.global_step - self._globalstep_last_logged),
-                    4,
+                    2,
                 )
             if grad_norm is not None:
                 logs["grad_norm"] = (
@@ -232,13 +232,13 @@ class MAdaptorTrainer(TevatronTrainer):
                     if isinstance(grad_norm, torch.Tensor)
                     else grad_norm
                 )
-                logs["grad_norm"] = round(logs["grad_norm"], 4)
+                logs["grad_norm"] = round(logs["grad_norm"], 2)
 
             if learning_rate is not None:
-                logs["learning_rate"] = learning_rate
+                logs["lr"] = learning_rate
             else:
-                logs["learning_rate"] = self._get_learning_rate()
-            logs["learning_rate"] = f"{learning_rate:.3e}"
+                logs["lr"] = self._get_learning_rate()
+            logs["lr"] = f"{learning_rate:.2e}"
 
             self._total_loss_scalar += tr_loss_scalar
             self._globalstep_last_logged = self.state.global_step
@@ -351,7 +351,7 @@ class MAdaptorTrainer(TevatronTrainer):
                 )
                 else self.accelerator.prepare_model(model, evaluation_mode=True)
             )
-            self.model_preparation_time = round(time.time() - start_time, 4)
+            self.model_preparation_time = round(time.time() - start_time, 2)
 
             if self.is_fsdp_enabled:
                 self.model = model
@@ -423,7 +423,7 @@ class MAdaptorTrainer(TevatronTrainer):
                     # loss = loss.detach().mean()
                     total_loss.append(loss)
 
-        eval_loss = {"eval_loss": round(torch.concat(total_loss).mean().item(), 4)}
+        eval_loss = {"eval_loss": round(torch.concat(total_loss).mean().item(), 2)}
         self.log(eval_loss)
 
         self.control = self.callback_handler.on_evaluate(

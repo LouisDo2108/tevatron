@@ -601,9 +601,6 @@ def main():
     counter = 0
 
     for ix, i in enumerate(tqdm(loader)):
-        
-        # if ix == 1:
-        #     break
 
         output = llm.chat(
             messages=i, 
@@ -684,6 +681,7 @@ def main():
             write_json(f"/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/explitcit/time-sensitive-qa/{counter}.jsonl",temporal_jsonl,jsonl=True)
             temporal_jsonl = []
             counter += 1
+            return
 
     write_json(f"/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/explitcit/time-sensitive-qa/{counter}.jsonl",temporal_jsonl,jsonl=True)
     

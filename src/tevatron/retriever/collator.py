@@ -197,6 +197,7 @@ class MultiModalTrainCollator:
         )
         return query_inputs, passage_inputs
 
+
 @dataclass
 class EncodeCollator:
     """
@@ -239,6 +240,7 @@ class EncodeCollator:
         #     return_tensors='pt',
         # )
         return content_ids, collated_inputs
+
 
 @dataclass
 class MultiModalEncodeCollator:

@@ -54,6 +54,11 @@ class DenseModel(EncoderModel):
                 reps = last_hidden_state[torch.arange(batch_size, device=last_hidden_state.device), sequence_lengths]
         else:
             raise ValueError(f'unknown pooling method: {self.pooling}')
+
+        if self.encoder.eval() and self.matryoshka_dim is not None:
+            print(f"Eval with matryoshka dim {self.matryoshka_dim}")
+            reps = reps[:, :self.matryoshka_dim]
+
         if self.normalize:
             reps = torch.nn.functional.normalize(reps, p=2, dim=-1)
         return reps

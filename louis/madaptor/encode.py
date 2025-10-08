@@ -6,21 +6,16 @@ from contextlib import nullcontext
 
 import numpy as np
 import torch
-from madaptor import UnsupervisedMAdaptor, UnsupervisedTemporalMAdaptor, SupervisedMAdaptor
-
-from madaptor import NaiveTemporalv4 as DenseModel
-
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import AutoTokenizer, HfArgumentParser
+from utils import set_seed
 
 from tevatron.retriever.arguments import DataArguments, ModelArguments
 from tevatron.retriever.arguments import TevatronTrainingArguments as TrainingArguments
 from tevatron.retriever.collator import EncodeCollator
 from tevatron.retriever.dataset import EncodeDataset
-from tevatron.retriever.modeling import EncoderOutput
-from utils import set_seed
-
+from tevatron.retriever.modeling import EncoderOutput, DenseModel
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +66,7 @@ def main():
         torch_dtype=torch_dtype,
         attn_implementation=model_args.attn_implementation,
     )
+    model.matryoshka_dim = training_args.matryoshka_dim
 
     encode_dataset = EncodeDataset(
         data_args=data_args,
@@ -97,14 +93,13 @@ def main():
 
     for (batch_ids, batch) in tqdm(encode_loader):
         lookup_indices.extend(batch_ids)
-        # with (
-        #     torch.autocast(
-        #         "cuda", dtype=torch.float16 if training_args.fp16 else torch.bfloat16
-        #     )
-        #     if training_args.fp16 or training_args.bf16
-        #     else nullcontext()
-        # ):
-        with torch.autocast('cuda') if training_args.fp16 or training_args.bf16 else nullcontext():
+        with (
+            torch.autocast(
+                "cuda", dtype=torch.float16 if training_args.fp16 else torch.bfloat16
+            )
+            if training_args.fp16 or training_args.bf16
+            else nullcontext()
+        ):
             with torch.no_grad():
                 for k, v in batch.items():
                     batch[k] = v.to(training_args.device)
