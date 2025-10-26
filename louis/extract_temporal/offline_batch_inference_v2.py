@@ -127,7 +127,7 @@ def normalize_and_split_string_by_punctuation(text):
     return [x.strip() for x in re.findall(punct_regex, text)]
 
 
-prompt_template = """You are a temporal annotation expert for information retrieval. We provide you with a query that may contain one or many temporal expressions and the corresponding SUTIME's output for your reference. We also provide you with previously annotated examples of positive and negative samples of the query; use them as references if they are semantically relevant to the query. Your job is to generate high-quality positive passages and negative passages for temporal contrastive learning.
+prompt_template = """You are a temporal annotation expert for information retrieval. We provide you with a query that may contain one or many temporal expressions and the corresponding SUTIME's output for your reference. We also provide you with previously annotated examples of positive and negative samples of the query; however, they maybe temporally irrelevant, thus use them as references only if they are both semantically and temporally relevant to the query. Your job is to generate high-quality positive passages and negative passages for temporal contrastive learning.
 Your final output are annotated JSONs (no indentation) that strictly follow the provided JSON schema.
 Your temporal annotations must be more precise and reliable than SUTIME or HeidelTime, with top-tier accuracy. 
 You must follow the definitions and instructions below.
@@ -594,9 +594,6 @@ def main():
     counter = 0
 
     for ix, i in enumerate(tqdm(loader)):
-        
-        # if ix == 1:
-        #     break
 
         output = llm.chat(
             messages=i, 
@@ -674,13 +671,13 @@ def main():
         temporal_jsonl.extend(temp)
 
         if (ix+1) % 10 == 0:
-            write_json(f"/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/temporal_nobel_prize/enhanced_temporal/v4/{counter}.jsonl",temporal_jsonl,jsonl=True)
+            write_json(f"/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/temporal_nobel_prize/{counter}_dev.jsonl",temporal_jsonl,jsonl=True)
             temporal_jsonl = []
             counter += 1
 
-    write_json(f"/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/temporal_nobel_prize/enhanced_temporal/v4/{counter}.jsonl",temporal_jsonl,jsonl=True)
+    write_json(f"/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/temporal_nobel_prize/train/{counter}_dev.jsonl",temporal_jsonl,jsonl=True)
     
-    del llm
+    # del llm
     cleanup_dist_env_and_memory()
 
 

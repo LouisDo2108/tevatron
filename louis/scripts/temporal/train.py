@@ -61,6 +61,7 @@ configs = {
         normalize="--normalize",
         padding_side="right",
         matryoshka_dim="768",
+        matryoshka_dim_list="768",
         temperature="0.02",
     ),
     "bgem3": dict(
@@ -73,6 +74,7 @@ configs = {
         normalize="--normalize",
         padding_side="right",
         matryoshka_dim="1024",
+        matryoshka_dim_list="1024",
         temperature="0.02",
     ),
     "contriever": dict(
@@ -85,6 +87,7 @@ configs = {
         normalize="",
         padding_side="right",
         matryoshka_dim="768",
+        matryoshka_dim_list="768",
         temperature="0.05",
     ),
     "gte": dict(
@@ -97,6 +100,7 @@ configs = {
         normalize="--normalize",
         padding_side="right",
         matryoshka_dim="768",
+        matryoshka_dim_list="768",
         temperature="0.02",
     ),
     "nomic": dict(
@@ -109,6 +113,7 @@ configs = {
         normalize="--normalize",
         padding_side="right",
         matryoshka_dim="768",
+        matryoshka_dim_list="768",
         temperature="0.02",
     ),
     "qwen3": dict(
@@ -121,6 +126,7 @@ configs = {
         normalize="--normalize",
         padding_side="left",
         matryoshka_dim="1024",
+        matryoshka_dim_list="1024",
         temperature="0.02",
     ),
 }
@@ -158,6 +164,23 @@ def main():
     parser.add_argument("--wandb", action="store_true", default=False)
     parser.add_argument("--gradient_checkpointing", action="store_true", default=False)
     parser.add_argument("--num_neg", default=1, type=int)
+    parser.add_argument("--qt", default=0.0, type=float)
+    parser.add_argument("--pt", default=0.0, type=float)
+    parser.add_argument("--qt_recon", default=0.0, type=float)
+    parser.add_argument("--pt_recon", default=0.0, type=float)
+    parser.add_argument("--temporal_dim", default=64, type=int)
+    parser.add_argument("--max_temporal_length", default=16, type=int)
+    parser.add_argument("--temporal", action="store_true", default=False)
+    parser.add_argument("--temporal_reconstruction", action="store_true", default=False)
+    parser.add_argument("--filter_false_negatives", action="store_true", default=False)
+    parser.add_argument("--kl_loss", action="store_true", default=False)
+    parser.add_argument(
+        "--matryoshka_dim_list",
+        type=int,
+        nargs="+",  # Accepts multiple integers
+        help="List of dimensions for Matryoshka representation, e.g. --matryoshka_dim_list 256 512 768",
+    )
+
     args = parser.parse_args()
 
     # ==== PATHS ====
@@ -165,14 +188,14 @@ def main():
     CODE_DIR = HOME / "code" / "tevatron"
     DATA_ROOT = HOME / "mg61_scratch2" / "thuy0050" / "data" / "third_work"
     OUTPUT_ROOT = HOME / "mg61_scratch2" / "thuy0050" / "exp" / "tevatron"
-    MODEL_NAME = "ts-retriever"
+    MODEL_NAME = "temporal"
 
     data_name = args.data
     exp_name = args.exp_name
 
     eval_dataset_path = ""
     if args.eval:
-        eval_dataset_path = f"--eval_dataset_path {DATA_ROOT}/temporal/temporal_nobel_prize/train/{'dev2' if args.enhanced_temporal else 'dev'}.jsonl"
+        eval_dataset_path = f"--eval_dataset_path {DATA_ROOT}/temporal/temporal_nobel_prize/train/dev2.jsonl --eval_on_start True --metric_for_best_model eval_recall@1_768"
         # eval_dataset_path = f"--eval_dataset_path {DATA_ROOT}/temporal/temporal_nobel_prize/train/dev.jsonl"
     else:
         eval_dataset_path = "--save_strategy epoch --load_best_model_at_end False"
@@ -201,9 +224,28 @@ def main():
         lora_train = f"--lora --lora_r {args.lora_r} --lora_alpha {args.lora_alpha} --lora_target_modules all-linear"
         lora_eval = f"--lora_name_or_path {output_dir}"
 
+    filter_false_negatives = ""
+    if args.filter_false_negatives:
+        filter_false_negatives = "--filter_false_negatives"
+    temporal = ""
+    if args.temporal:
+        temporal = "--temporal"
+    temporal_reconstruction = ""
+    if args.temporal_reconstruction:
+        temporal_reconstruction = "--temporal_reconstruction"
+
+    matryoshka_dim_list_str = ""
+    if not args.matryoshka_dim_list:
+        matryoshka_dim_list_str = " ".join(
+            x for x in cfg["matryoshka_dim_list"].split(" ")
+        )
+    else:
+        matryoshka_dim_list_str = " ".join(
+            x for x in args.matryoshka_dim_list.split(" ")
+        )
     # ==== COMMANDS ====
     train_cmd = f"""
-    python {CODE_DIR}/src/tevatron/retriever/driver/train.py \
+    python {CODE_DIR}/louis/madaptor/train_temporal.py \
         --do_train \
         --pooling {cfg['pooling']} \
         --bf16 \
@@ -228,7 +270,15 @@ def main():
         --padding_side {cfg['padding_side']} \
         --matryoshka_dim {cfg['matryoshka_dim']} \
         {grad_ckpt} \
-        > {output_dir}/train_log.txt
+        {temporal} \
+        {temporal_reconstruction} \
+        --temporal_dim {args.temporal_dim} \
+        --pt {args.pt} \
+        --qt {args.qt} \
+        --pt_recon {args.pt_recon} \
+        --qt_recon {args.qt_recon} \
+        {filter_false_negatives} \
+        --matryoshka_dim_list {matryoshka_dim_list_str} > {output_dir}/train.log.txt
     """
 
     encode_corpus_cmd = f"""

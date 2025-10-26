@@ -158,7 +158,7 @@ class MAdaptorTrainer(TevatronTrainer):
         #     if not _grad_cache_available:
         #         raise ValueError(
         #             'Grad Cache package not available. You can obtain it from https://github.com/luyug/GradCache.')
-                
+
         #     self.grad_cache = True
 
         #     self.gc = GradCache(
@@ -170,7 +170,6 @@ class MAdaptorTrainer(TevatronTrainer):
         #         fp16=self.args.fp16,
         #         scaler=self.scaler if self.args.fp16 else None
         #     )
-                
 
     def _save(self, output_dir: Optional[str] = None, state_dict=None):
         # If we are executing this function, we are the process zero, so we don't check for that.
@@ -180,12 +179,12 @@ class MAdaptorTrainer(TevatronTrainer):
 
         if state_dict is None:
             state_dict = self.model.state_dict()
-            
+
             # Remove the base_model which is only used for KL loss
             model_state_dict = {
                 k: v for k, v in state_dict.items() if k.startswith("base_model.")
             }
-            
+
             # Remove the encoder of Tevatron's DenseModel wrapper.
             prefix = "encoder."
             model_state_dict = {k[len(prefix) :]: v for k, v in state_dict.items() if k.startswith(prefix)}
@@ -226,27 +225,59 @@ class MAdaptorTrainer(TevatronTrainer):
 
         return (loss, outputs) if return_outputs else loss
 
+    def recall_at_k(self, scores, target, k=5):
+        # scores: [num_queries, num_passages]
+        # target: [num_queries] → index of positive passage per query
+        topk = scores.topk(k, dim=1).indices  # [num_queries, k]
+        correct = (topk == target.unsqueeze(1)).any(dim=1)
+        return correct.float()
+
+    def cosine_diagnostics(self, scores, target):
+        pos_scores = scores[torch.arange(scores.size(0)), target]
+        neg_mask = torch.ones_like(scores, dtype=torch.bool)
+        neg_mask[torch.arange(scores.size(0)), target] = False
+        neg_scores = scores[neg_mask].view(scores.size(0), -1)
+
+        return pos_scores, neg_scores
+
     def eval_step(self, model, inputs):
         query, passage = inputs
-        # (q_collated_list, query_temporal_token_spans_list, query_temporal_tokens_input_ids_list), (d_collated_list, passage_temporal_token_spans_list, passage_temporal_tokens_input_ids_list, torch.as_tensor([temporal_query_type_class_id[x] for x in all_passages_temporal_query_type_list_str]), torch.as_tensor([allen_relation_class_id[x] for x in all_passages_allen_relation_list_str]))
+
+        q_reps = model.encode_query(query) if query else None
+        p_reps = model.encode_passage(passage) if passage else None
         
-        with torch.autocast('cuda', dtype=torch.bfloat16):
-            q_reps = model.encode_query(query) if query else None
-            p_reps = model.encode_passage(passage) if passage else None
+        
+        metrics = {}
+        for m in self.model.matryoshka_dim_list:
 
-        scores_semantic = self.model.compute_similarity(q_reps, p_reps)
+            scores_semantic = self.model.compute_similarity(q_reps[:, :m], p_reps[:, :m])
 
-        num_neg = p_reps.size(0) // q_reps.size(0)
-        target = torch.arange(
-            scores_semantic.size(0),
-            device=scores_semantic.device,
-            dtype=torch.long,
-        )
-        target = target * num_neg
+            num_neg = p_reps.size(0) // q_reps.size(0)
+            target = torch.arange(
+                scores_semantic.size(0),
+                device=scores_semantic.device,
+                dtype=torch.long,
+            )
+            target = target * num_neg
 
-        loss = F.cross_entropy(scores_semantic / self.model.temperature, target, reduction="none")
-        # losses = {"loss": loss}
-        return loss
+            # ---- Add diagnostics ----
+            with torch.no_grad():
+                recall1 = self.recall_at_k(scores_semantic, target, k=1)
+                recall5 = self.recall_at_k(scores_semantic, target, k=5)
+                pos_sim, neg_sim = self.cosine_diagnostics(scores_semantic, target)
+
+                metrics.update({
+                    f"loss_{m}": F.cross_entropy(scores_semantic / self.model.temperature, target, reduction="none"),
+                    f"recall@1_{m}": recall1,
+                    f"recall@5_{m}": recall5,
+                    f"pos_sim_{m}": pos_sim,
+                    f"neg_sim_{m}": neg_sim,
+                })
+        return metrics
+
+        # loss = F.cross_entropy(scores_semantic / self.model.temperature, target, reduction="none")
+        # # losses = {"loss": loss}
+        # return loss
 
     def training_step(self, *args):
         return (
@@ -469,40 +500,80 @@ class MAdaptorTrainer(TevatronTrainer):
         # Do this before wrapping.
         eval_dataset = getattr(eval_dataloader, "dataset", None)
 
-        metrics = None
+        metrics = {}
         eval_set_kwargs = {}
 
         # Will be useful when we have an iterable dataset so don't know its length.
         observed_num_examples = 0
 
         # Main evaluation loop
-        total_loss = []
+        total_correct1 = {m: [] for m in self.model.matryoshka_dim_list}
+        total_correct5 = {m: [] for m in self.model.matryoshka_dim_list}
+        total_loss = {m: [] for m in self.model.matryoshka_dim_list}
+        pos_sims = {m: [] for m in self.model.matryoshka_dim_list}
+        neg_sims = {m: [] for m in self.model.matryoshka_dim_list}
+
+        total_queries = 0
+        observed_num_examples = 0
+
         with torch.no_grad():
             for step, inputs in enumerate(eval_dataloader):
-                # Update the observed num examples
+                # Update observed examples
                 observed_batch_size = find_batch_size(inputs)
                 if observed_batch_size is not None:
                     observed_num_examples += observed_batch_size
-                    # For batch samplers, batch_size is not known by the dataloader in advance.
                     if batch_size is None:
                         batch_size = observed_batch_size
-                    with self.compute_loss_context_manager():
-                        loss = self.eval_step(
-                            model, inputs
-                        )
-                    # loss = loss.detach().mean()
-                    total_loss.append(loss)
 
-        eval_loss = {"eval_loss": round(torch.concat(total_loss).mean().item(), 2)}
+                with self.compute_loss_context_manager():
+                    metrics = self.eval_step(model, inputs)
+
+                # Accumulate per-dimension metrics
+                for m in self.model.matryoshka_dim_list:
+                    total_loss[m].append(metrics.get(f"loss_{m}", torch.tensor(0.0)))
+                    total_correct1[m].append(metrics.get(f"recall@1_{m}", torch.tensor(0.0)))
+                    total_correct5[m].append(metrics.get(f"recall@5_{m}", torch.tensor(0.0)))
+                    pos_sims[m].append(metrics.get(f"pos_sim_{m}", torch.tensor(0.0)))
+                    neg_sims[m].append(metrics.get(f"neg_sim_{m}", torch.tensor(0.0)))
+
+                total_queries += observed_batch_size
+
+        # Aggregate
+        eval_loss = {}
+        for m in self.model.matryoshka_dim_list:
+            eval_loss[f"eval_loss_{m}"] = round(torch.stack(total_loss[m]).mean().item(), 2)
+            eval_loss[f"eval_recall@1_{m}"] = round(torch.stack(total_correct1[m]).mean().item(), 4)
+            eval_loss[f"eval_recall@5_{m}"] = round(torch.stack(total_correct5[m]).mean().item(), 4)
+            eval_loss[f"eval_pos_sim_{m}"] = round(torch.stack(pos_sims[m]).mean().item(), 4)
+            eval_loss[f"eval_neg_sim_{m}"] = round(torch.stack(neg_sims[m]).mean().item(), 4)
+            eval_loss[f"eval_margin_{m}"] = round(
+                eval_loss[f"eval_pos_sim_{m}"] - eval_loss[f"eval_neg_sim_{m}"], 4
+            )
+
+            
+            # avg_loss = round(torch.concat(total_loss).mean().item(), 2)
+            # avg_recall1 = round(torch.concat(total_correct1).mean().item(), 4)
+            # avg_recall5 = round(torch.concat(total_correct5).mean().item(), 4)
+            # avg_pos = round(torch.concat(pos_sims).mean().item(), 4)
+            # avg_neg = round(torch.concat(neg_sims).mean().item(), 4)
+
+            # eval_loss = {
+            #     "eval_loss": avg_loss,
+            #     "eval_recall@1": avg_recall1,
+            #     "eval_recall@5": avg_recall5,
+            #     "eval_pos_sim": avg_pos,
+            #     "eval_neg_sim": avg_neg,
+            #     "eval_margin": round((avg_pos - avg_neg), 4),
+            # }
         self.log(eval_loss)
 
         self.control = self.callback_handler.on_evaluate(
-            self.args, self.state, self.control, total_loss
+            self.args, self.state, self.control, eval_loss
         )
 
-        self._memory_tracker.stop_and_update_metrics(eval_loss)  # output.metrics)
+        self._memory_tracker.stop_and_update_metrics(eval_loss)
 
-        return eval_loss # output.metrics
+        return eval_loss
 
 
 class SentenceTransformerStyleTrainer(MAdaptorTrainer):

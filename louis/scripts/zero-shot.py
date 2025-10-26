@@ -3,6 +3,8 @@ import re
 import argparse
 import subprocess
 from pathlib import Path
+from pprint import pprint, pformat
+from pdb import set_trace as st
 from typing import Union, List, Optional
 
 # Compile once at module load time for speed
@@ -39,7 +41,10 @@ def run(
         return
 
     try:
-        subprocess.run(joined_cmd, shell=True, check=True, env=env)
+        # print("Running with the following environment variables:")
+        # pprint({k: v for k, v in os.environ.items()})
+        
+        subprocess.run(joined_cmd, shell=True, check=True, env=dict(os.environ))
     except subprocess.CalledProcessError as e:
         print(f"❌ Command failed with exit code {e.returncode}")
         raise
@@ -121,7 +126,8 @@ def main():
         description="Zero-Shot Temporal Retriever Evaluation"
     )
     parser.add_argument(
-        "model",
+        "--model",
+        required=True,
         type=str,
         help="Model name, e.g. bge | bgem3 | contriever | gte | nomic | qwen3",
     )
@@ -220,9 +226,9 @@ def main():
         --matryoshka_dim {cfg['matryoshka_dim']}
     """
 
-    # === EXECUTION ===
+    # ==== EXECUTION ====
     run([encode_corpus_cmd, encode_query_cmd, retrieval_cmd])
-
+    # run([retrieval_cmd])
 
 if __name__ == "__main__":
     main()

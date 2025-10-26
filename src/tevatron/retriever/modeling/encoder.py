@@ -53,6 +53,7 @@ class EncoderModel(nn.Module):
             self.process_rank = dist.get_rank()
             self.world_size = dist.get_world_size()
         self.matryoshka_dim = None
+        self.matryoshka_dim_list = None
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
         # For KL loss

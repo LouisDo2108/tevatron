@@ -59,58 +59,58 @@ if [ -n "$lora_name_path" ]; then
   lora_args="--lora --lora_name_or_path ${lora_name_path}"
 fi
 
-# # Encode passages
-# for s in $(seq -f "%02g" 0 7); do
-#   CUDA_VISIBLE_DEVICES=0 python -m tevatron.retriever.driver.encode \
-#     --output_dir=temp \
-#     --model_name_or_path ${model_name_path} \
-#     --fp16 \
-#     ${lora_args} \
-#     ${normalize_flag} \
-#     --pooling eos \
-#     --passage_prefix "${passage_prefix}" \
-#     --per_device_eval_batch_size 512 \
-#     --passage_max_len 512 \
-#     --dataset_name Tevatron/beir-corpus \
-#     --dataset_config ${dataset} \
-#     --encode_output_path $embedding_dir/corpus_${dataset}.${s}.pkl \
-#     --dataset_number_of_shards 8 \
-#     --dataset_shard_index ${s} \
-#     --attn_implementation sdpa # Scaled Dot Product Attention, for BERT
-# done
+# Encode passages
+for s in $(seq -f "%02g" 0 7); do
+  CUDA_VISIBLE_DEVICES=0 python -m tevatron.retriever.driver.encode \
+    --output_dir=temp \
+    --model_name_or_path ${model_name_path} \
+    --fp16 \
+    ${lora_args} \
+    ${normalize_flag} \
+    --pooling eos \
+    --passage_prefix "${passage_prefix}" \
+    --per_device_eval_batch_size 512 \
+    --passage_max_len 512 \
+    --dataset_name Tevatron/beir-corpus \
+    --dataset_config ${dataset} \
+    --encode_output_path $embedding_dir/corpus_${dataset}.${s}.pkl \
+    --dataset_number_of_shards 8 \
+    --dataset_shard_index ${s} \
+    --attn_implementation sdpa # Scaled Dot Product Attention, for BERT
+done
 
-# # Encode queries
-# CUDA_VISIBLE_DEVICES=0 python -m tevatron.retriever.driver.encode \
-#   --output_dir=temp \
-#   --model_name_or_path ${model_name_path} \
-#   --fp16 \
-#   ${lora_args} \
-#   ${normalize_flag} \
-#   --pooling eos \
-#   --query_prefix "${query_prefix}" \
-#   --per_device_eval_batch_size 512 \
-#   --dataset_name Tevatron/beir \
-#   --dataset_config ${dataset} \
-#   --dataset_split "test" \
-#   --encode_output_path $embedding_dir/query_${dataset}.pkl \
-#   --query_max_len 512 \
-#   --encode_is_query \
-#   --attn_implementation sdpa # Scaled Dot Product Attention, for BERT
+# Encode queries
+CUDA_VISIBLE_DEVICES=0 python -m tevatron.retriever.driver.encode \
+  --output_dir=temp \
+  --model_name_or_path ${model_name_path} \
+  --bf16 \
+  ${lora_args} \
+  ${normalize_flag} \
+  --pooling mean \
+  --query_prefix "${query_prefix}" \
+  --per_device_eval_batch_size 512 \
+  --dataset_name Tevatron/beir \
+  --dataset_config ${dataset} \
+  --dataset_split "test" \
+  --encode_output_path $embedding_dir/query_${dataset}.pkl \
+  --query_max_len 512 \
+  --encode_is_query \
+  --attn_implementation sdpa # Scaled Dot Product Attention, for BERT
 
-# # Perform retrieval
-# set -f && OMP_NUM_THREADS=12 python -m tevatron.retriever.driver.search \
-#     --query_reps $embedding_dir/query_${dataset}.pkl \
-#     --passage_reps $embedding_dir/corpus_${dataset}.*.pkl \
-#     --depth 1000 \
-#     --batch_size 512 \
-#     --save_text \
-#     --save_ranking_to $embedding_dir/rank.${dataset}.txt
+# Perform retrieval
+set -f && OMP_NUM_THREADS=12 python -m tevatron.retriever.driver.search \
+    --query_reps $embedding_dir/query_${dataset}.pkl \
+    --passage_reps $embedding_dir/corpus_${dataset}.*.pkl \
+    --depth 1000 \
+    --batch_size 512 \
+    --save_text \
+    --save_ranking_to $embedding_dir/rank.${dataset}.txt
 
-# # Convert results to TREC format
-# python -m tevatron.utils.format.convert_result_to_trec \
-#     --input $embedding_dir/rank.${dataset}.txt \
-#     --output $embedding_dir/rank.${dataset}.trec \
-#     --remove_query
+# Convert results to TREC format
+python -m tevatron.utils.format.convert_result_to_trec \
+    --input $embedding_dir/rank.${dataset}.txt \
+    --output $embedding_dir/rank.${dataset}.trec \
+    --remove_query
 
 # Evaluate results using pyserini
 python -m pyserini.eval.trec_eval -c \

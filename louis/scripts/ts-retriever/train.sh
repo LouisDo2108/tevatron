@@ -21,6 +21,8 @@
 source ~/.bashrc
 conda activate tevatron
 
+ulimit -n 4096
+
 export CUDA_VISIBLE_DEVICES=0
 # export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
@@ -31,14 +33,185 @@ export PYTORCH_CUDA_ALLOC_CONF=garbage_collection_threshold:0.6
 
 # Useful for pytorch debugging: torch.autograd.set_detect_anomaly(True)
 
-
 cd /home/thuy0050/code/tevatron
 
 python louis/scripts/ts-retriever/train.py \
     --model bge \
     --data temporal_nobel_prize \
-    --exp_name dev \
-    --batch_size 128 \
-    --gradient_accumulation_steps 1 \
-    --epoch 1
+    --exp_name dev2 \
+    --enhanced_temporal \
+    --lora \
+    --eval \
+    --batch_size 256 \
+    --num_neg 1 \
+    --epoch 5
 
+# time_sensitive_qa
+
+# python louis/scripts/ts-retriever/train.py \
+#     --model contriever \
+#     --data temporal_nobel_prize \
+#     --enhanced_temporal \
+#     --exp_name ts-retriever-our-dataset-dev \
+#     --eval \
+#     --batch_size 64 \
+#     --num_neg 1 \
+#     --epoch 5
+
+# python louis/scripts/ts-retriever/train.py \
+#     --model contriever \
+#     --data temporal_nobel_prize \
+#     --enhanced_temporal \
+#     --exp_name baseline_our_dataset_original_dev \
+#     --lora \
+#     --eval \
+#     --batch_size 256 \
+#     --num_neg 1 \
+#     --epoch 5
+
+# python louis/scripts/ts-retriever/train.py \
+#     --model bgem3 \
+#     --data temporal_nobel_prize \
+#     --enhanced_temporal \
+#     --exp_name baseline_our_dataset_original_dev \
+#     --lora \
+#     --eval \
+#     --batch_size 256 \
+#     --num_neg 1 \
+#     --epoch 5 \
+#     --gradient_checkpointing
+
+python louis/scripts/ts-retriever/train.py \
+    --model bge \
+    --data temporal_nobel_prize \
+    --enhanced_temporal \
+    --exp_name baseline_our_dataset \
+    --lora \
+    --eval \
+    --batch_size 256 \
+    --num_neg 1 \
+    --epoch 5
+
+python louis/scripts/ts-retriever/train.py \
+    --model bge \
+    --data temporal_nobel_prize \
+    --exp_name baseline \
+    --lora \
+    --eval \
+    --batch_size 256 \
+    --num_neg 1 \
+    --epoch 5
+
+python louis/scripts/ts-retriever/train.py \
+    --model bge \
+    --data time_sensitive_qa \
+    --exp_name baseline \
+    --lora \
+    --eval \
+    --batch_size 256 \
+    --num_neg 1 \
+    --epoch 5
+
+python louis/scripts/ts-retriever/train.py \
+    --model nomic \
+    --data temporal_nobel_prize \
+    --enhanced_temporal \
+    --exp_name baseline_our_dataset \
+    --lora \
+    --eval \
+    --batch_size 128 \
+    --num_neg 1 \
+    --epoch 5 \
+    --gradient_accumulation_steps 2
+
+python louis/scripts/ts-retriever/train.py \
+    --model nomic \
+    --data temporal_nobel_prize \
+    --exp_name baseline \
+    --lora \
+    --eval \
+    --batch_size 128 \
+    --num_neg 1 \
+    --epoch 5 \
+    --gradient_accumulation_steps 2
+
+python louis/scripts/ts-retriever/train.py \
+    --model nomic \
+    --data time_sensitive_qa \
+    --exp_name baseline \
+    --lora \
+    --eval \
+    --batch_size 128 \
+    --num_neg 1 \
+    --epoch 5 \
+    --gradient_accumulation_steps 2
+
+python louis/scripts/ts-retriever/train.py \
+    --model qwen3 \
+    --data temporal_nobel_prize \
+    --enhanced_temporal \
+    --exp_name baseline_our_dataset \
+    --lora \
+    --eval \
+    --batch_size 256 \
+    --num_neg 1 \
+    --epoch 5 \
+    --gradient_checkpointing
+
+python louis/scripts/ts-retriever/train.py \
+    --model qwen3 \
+    --data temporal_nobel_prize \
+    --exp_name baseline \
+    --lora \
+    --eval \
+    --batch_size 256 \
+    --num_neg 1 \
+    --epoch 5 \
+    --gradient_checkpointing
+
+python louis/scripts/ts-retriever/train.py \
+    --model qwen3 \
+    --data time_sensitive_qa \
+    --exp_name baseline \
+    --lora \
+    --eval \
+    --batch_size 256 \
+    --num_neg 1 \
+    --epoch 5 \
+    --gradient_checkpointing
+
+# python louis/scripts/ts-retriever/train.py \
+#     --model gte \
+#     --data temporal_nobel_prize \
+#     --enhanced_temporal \
+#     --exp_name baseline_our_dataset_original_dev \
+#     --lora \
+#     --eval \
+#     --batch_size 256 \
+#     --num_neg 1 \
+#     --epoch 5
+
+# python louis/scripts/ts-retriever/train.py \
+#     --model qwen3 \
+#     --data temporal_nobel_prize \
+#     --enhanced_temporal \
+#     --exp_name baseline_our_dataset_original_dev \
+#     --lora \
+#     --eval \
+#     --batch_size 256 \
+#     --num_neg 1 \
+#     --epoch 5 \
+#     --gradient_checkpointing
+
+
+# python louis/scripts/ts-retriever/train.py \
+#     --model nomic \
+#     --data temporal_nobel_prize \
+#     --enhanced_temporal \
+#     --exp_name baseline_our_dataset_original_dev \
+#     --lora \
+#     --eval \
+#     --batch_size 128 \
+#     --gradient_accumulation_steps 2 \
+#     --num_neg 1 \
+#     --epoch 5

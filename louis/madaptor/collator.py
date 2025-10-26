@@ -681,15 +681,15 @@ class TempRetrieverCollator(TrainCollator):
 
         all_passages_str = []
         all_passages_temporal_list_list_str = []
-        all_passages_temporal_query_type_list_str = []
-        all_passages_allen_relation_list_str = []
+        # all_passages_temporal_query_type_list_str = []
+        # all_passages_allen_relation_list_str = []
 
         for i in all_passages_list_list_tuple:
             for j in i:
                 all_passages_str.append(j[0])
                 all_passages_temporal_list_list_str.append(j[1])
-                all_passages_temporal_query_type_list_str.append(j[2])
-                all_passages_allen_relation_list_str.append(j[3])
+                # all_passages_temporal_query_type_list_str.append(j[2])
+                # all_passages_allen_relation_list_str.append(j[3])
 
         # Process the query side
         q_collated_list = self.tokenizer(
@@ -709,7 +709,7 @@ class TempRetrieverCollator(TrainCollator):
             padding_side=self.data_args.padding_side,
         )
 
-        qt_list = [x[0] for xs in all_query_temporal_list_list_str for x in xs]
+        qt_list = [" ".join(x) for xs in all_query_temporal_list_list_str for x in xs]
 
         qt_collated_list = self.tokenizer(
             qt_list,
@@ -728,7 +728,7 @@ class TempRetrieverCollator(TrainCollator):
             padding_side=self.data_args.padding_side,
         )
 
-        dt_list = [x[0] for xs in all_passages_temporal_list_list_str for x in xs]
+        dt_list = [" ".join(x) for xs in all_passages_temporal_list_list_str for x in xs]
 
         # Process the passage side
         d_collated_list = self.tokenizer(
@@ -771,18 +771,18 @@ class TempRetrieverCollator(TrainCollator):
         ), (
             d_collated_list,
             dt_collated_list,
-            torch.as_tensor(
-                [
-                    temporal_query_type_class_id[x]
-                    for x in all_passages_temporal_query_type_list_str
-                ]
-            ),
-            torch.as_tensor(
-                [
-                    allen_relation_class_id[x]
-                    for x in all_passages_allen_relation_list_str
-                ]
-            ),
+            # torch.as_tensor(
+            #     [
+            #         temporal_query_type_class_id[x]
+            #         for x in all_passages_temporal_query_type_list_str
+            #     ]
+            # ),
+            # torch.as_tensor(
+            #     [
+            #         allen_relation_class_id[x]
+            #         for x in all_passages_allen_relation_list_str
+            #     ]
+            # ),
         )
 
     def get_temporal_token_spans(

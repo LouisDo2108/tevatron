@@ -4,8 +4,8 @@
 #SBATCH --gres=gpu:A100:1
 #SBATCH --qos=fitq
 #SBATCH --job-name=thuy0050
-#SBATCH --output=/home/thuy0050/code/MixLoraDSI/logs/slurm-%x-%j.out
-#SBATCH --error=/home/thuy0050/code/MixLoraDSI/logs/slurm-%x-%j.err
+#SBATCH --output=/home/thuy0050/code/tevatron/louis/logs/slurm-%x-%j.out
+#SBATCH --error=/home/thuy0050/code/tevatron/louis/logs/slurm-%x-%j.err
 #SBATCH --time=1-00:00:00
 
 #SBATCH --nodes=1
@@ -22,7 +22,9 @@ source ~/.bashrc
 conda activate tevatron
 
 export CUDA_VISIBLE_DEVICES=0
-export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+# export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export PYTORCH_CUDA_ALLOC_CONF=garbage_collection_threshold:0.6
 # export TQDM_DISABLE=1 # Avoid logging tqdm progress bars
 # export TORCH_USE_CUDA_DSA=0 # Set to 1 only if debugging
 # export CUDA_LAUNCH_BLOCKING=0 # Set to 1 only if debugging
@@ -31,17 +33,8 @@ export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
 
 cd /home/thuy0050/code/tevatron
 
-DATA_ROOT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/data/third_work
-OUTPUT_DIR_ROOT=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron
-
-DATA_NAME=beir/nq
-MODEL_NAME=ts-retriever
-BACKBONE=tscontriever
-EXP_NAME=ts-retriever
-OUTPUT_DIR=$OUTPUT_DIR_ROOT/$DATA_NAME/$MODEL_NAME/$BACKBONE/$EXP_NAME
-
-bash louis/tevatron_eval_beir.sh \
-    --dataset nq \
-    --model_name_path /home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron/temporal_nobel_prize/ts-retriever/tscontriever/original-ts-retriever/models/Tscontriever \
-    --embedding_dir $OUTPUT_DIR \
-    --normalize
+python /home/thuy0050/code/tevatron/louis/beir_scripts/tevatron_eval_beir.py \
+    --model tempretriever \
+    --data temporal_nobel_prize \
+    --exp_name 256_neg1_ep10 \
+    --lora

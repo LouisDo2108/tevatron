@@ -4,6 +4,7 @@ import inspect
 import logging
 import math
 import os
+import numpy as np
 import time
 from collections import defaultdict
 from collections.abc import Iterator
@@ -118,12 +119,12 @@ class MAdaptorTrainer(TevatronTrainer):
 
         if state_dict is None:
             state_dict = self.model.state_dict()
-            
+
             # Remove the base_model which is only used for KL loss
             model_state_dict = {
                 k: v for k, v in state_dict.items() if k.startswith("base_model.")
             }
-            
+
             # Remove the encoder of Tevatron's DenseModel wrapper.
             prefix = "encoder."
             model_state_dict = {k[len(prefix) :]: v for k, v in state_dict.items() if k.startswith(prefix)}
@@ -163,13 +164,26 @@ class MAdaptorTrainer(TevatronTrainer):
     #         self.other_losses[loss_name] += some_loss / self.args.gradient_accumulation_steps
 
     #     return (loss, outputs) if return_outputs else loss
+    def recall_at_k(self, scores, target, k=5):
+        # scores: [num_queries, num_passages]
+        # target: [num_queries] → index of positive passage per query
+        topk = scores.topk(k, dim=1).indices  # [num_queries, k]
+        correct = (topk == target.unsqueeze(1)).any(dim=1)
+        return correct.float()
+
+    def cosine_diagnostics(self, scores, target):
+        pos_scores = scores[torch.arange(scores.size(0)), target]
+        neg_mask = torch.ones_like(scores, dtype=torch.bool)
+        neg_mask[torch.arange(scores.size(0)), target] = False
+        neg_scores = scores[neg_mask].view(scores.size(0), -1)
+
+        return pos_scores, neg_scores
 
     def eval_step(self, model, inputs):
         query, passage = inputs
+
         q_reps = model.encode_query(query) if query else None
-
         p_reps = model.encode_passage(passage) if passage else None
-
         scores_semantic = self.model.compute_similarity(q_reps, p_reps)
 
         num_neg = p_reps.size(0) // q_reps.size(0)
@@ -180,9 +194,24 @@ class MAdaptorTrainer(TevatronTrainer):
         )
         target = target * num_neg
 
-        loss = F.cross_entropy(scores_semantic / self.model.temperature, target, reduction="none")
-        # losses = {"loss": loss}
-        return loss
+        # ---- Add diagnostics ----
+        with torch.no_grad():
+            recall1 = self.recall_at_k(scores_semantic, target, k=1)
+            recall5 = self.recall_at_k(scores_semantic, target, k=5)
+            pos_sim, neg_sim = self.cosine_diagnostics(scores_semantic, target)
+
+        metrics = {
+            "loss": F.cross_entropy(scores_semantic / self.model.temperature, target, reduction="none"),
+            "recall@1": recall1,
+            "recall@5": recall5,
+            "pos_sim": pos_sim,
+            "neg_sim": neg_sim,
+        }
+        return metrics
+
+        # loss = F.cross_entropy(scores_semantic / self.model.temperature, target, reduction="none")
+        # # losses = {"loss": loss}
+        # return loss
 
     def _load_from_checkpoint(self, resume_from_checkpoint, model=None):
         pass
@@ -406,6 +435,12 @@ class MAdaptorTrainer(TevatronTrainer):
         observed_num_examples = 0
 
         # Main evaluation loop
+        total_loss = 0.0
+        total_correct1 = []
+        total_correct5 = []
+        total_queries = 0
+        pos_sims, neg_sims = [], []
+
         total_loss = []
         with torch.no_grad():
             for step, inputs in enumerate(eval_dataloader):
@@ -416,21 +451,66 @@ class MAdaptorTrainer(TevatronTrainer):
                     # For batch samplers, batch_size is not known by the dataloader in advance.
                     if batch_size is None:
                         batch_size = observed_batch_size
-                    with self.compute_loss_context_manager():
-                        loss = self.eval_step(
-                            model, inputs
-                        )
-                    # loss = loss.detach().mean()
-                    total_loss.append(loss)
 
-        eval_loss = {"eval_loss": round(torch.concat(total_loss).mean().item(), 2)}
+                    with self.compute_loss_context_manager():
+                        metrics = self.eval_step(model, inputs)
+                    total_loss.append(metrics["loss"])
+                    total_correct1.append(metrics["recall@1"])
+                    total_correct5.append(metrics["recall@5"])
+                    pos_sims.append(metrics["pos_sim"])
+                    neg_sims.append(metrics["neg_sim"])
+                    total_queries += observed_batch_size
+
+        # Aggregate
+        avg_loss = round(torch.concat(total_loss).mean().item(), 2)
+        avg_recall1 = round(torch.concat(total_correct1).mean().item(), 4)
+        avg_recall5 = round(torch.concat(total_correct5).mean().item(), 4)
+        avg_pos = round(torch.concat(pos_sims).mean().item(), 4)
+        avg_neg = round(torch.concat(neg_sims).mean().item(), 4)
+
+        eval_loss = {
+            "eval_loss": avg_loss,
+            "eval_recall@1": avg_recall1,
+            "eval_recall@5": avg_recall5,
+            "eval_pos_sim": avg_pos,
+            "eval_neg_sim": avg_neg,
+            "eval_margin": round((avg_pos - avg_neg), 4),
+        }
         self.log(eval_loss)
 
         self.control = self.callback_handler.on_evaluate(
-            self.args, self.state, self.control, total_loss
+            self.args, self.state, self.control, eval_loss
         )
 
-        self._memory_tracker.stop_and_update_metrics(eval_loss)  # output.metrics)
+        self._memory_tracker.stop_and_update_metrics(eval_loss)
 
-        return eval_loss # output.metrics
+        return eval_loss
 
+    # # Main evaluation loop
+    # total_loss = []
+    # with torch.no_grad():
+    #     for step, inputs in enumerate(eval_dataloader):
+    #         # Update the observed num examples
+    #         observed_batch_size = find_batch_size(inputs)
+    #         if observed_batch_size is not None:
+    #             observed_num_examples += observed_batch_size
+    #             # For batch samplers, batch_size is not known by the dataloader in advance.
+    #             if batch_size is None:
+    #                 batch_size = observed_batch_size
+    #             with self.compute_loss_context_manager():
+    #                 loss = self.eval_step(
+    #                     model, inputs
+    #                 )
+    #             # loss = loss.detach().mean()
+    #             total_loss.append(loss)
+
+    # # eval_loss = {"eval_loss": round(torch.concat(total_loss).mean().item(), 2)}
+    # # self.log(eval_loss)
+
+    # # self.control = self.callback_handler.on_evaluate(
+    # #     self.args, self.state, self.control, total_loss
+    # # )
+
+    # # self._memory_tracker.stop_and_update_metrics(eval_loss)  # output.metrics)
+
+    # return eval_loss # output.metrics

@@ -1,20 +1,22 @@
-import wandb
 import logging
 import os
+import random
 import sys
 from copy import deepcopy
-from pdb import set_trace as st
 from dataclasses import asdict
-
-import torch
-from transformers import AutoTokenizer, AutoConfig
-import numpy as np
-import random
 from pathlib import Path
+from pdb import set_trace as st
+from pprint import pformat, pprint
+import msgspec
+from msgspec.json import format
 
-from transformers.utils.import_utils import is_torch_available
+import numpy as np
+import torch
+import wandb
+from transformers import AutoConfig, AutoTokenizer
 from transformers.hf_argparser import HfArgumentParser
 from transformers.trainer_utils import get_last_checkpoint
+from transformers.utils.import_utils import is_torch_available
 
 from tevatron.retriever.arguments import DataArguments, ModelArguments
 from tevatron.retriever.arguments import TevatronTrainingArguments as TrainingArguments
@@ -22,13 +24,11 @@ from tevatron.retriever.collator import TrainCollator
 from tevatron.retriever.dataset import TrainDataset
 from tevatron.retriever.gc_trainer import GradCacheTrainer as GCTrainer
 from tevatron.retriever.modeling import DenseModel
+
 # from tevatron.retriever.trainer import TevatronTrainer as Trainer
 from tevatron.retriever.trainer import MAdaptorTrainer as Trainer
 
 logger = logging.getLogger(__name__)
-
-import msgspec
-from msgspec.json import format
 
 encoder = msgspec.json.Encoder()
 decoder = msgspec.json.Decoder()
@@ -125,8 +125,9 @@ def main():
         bool(training_args.local_rank != -1),
         training_args.fp16,
     )
-    logger.info("Training/evaluation parameters %s", training_args)
-    logger.info("MODEL parameters %s", model_args)
+    logger.info("\n##### Training/evaluation arguments #####\n %s\n", pformat(training_args))
+    logger.info("\n ##### Model arguments #####\n %s\n", pformat(model_args))
+    logger.info("\n ##### Data arguments #####\n %s\n", pformat(data_args))
 
     set_seed(training_args.seed)
 
@@ -148,15 +149,19 @@ def main():
     else:
         tokenizer.padding_side = "left"
 
-    if training_args.bf16:
-        torch_dtype = torch.bfloat16
-        print(f"Training in bf16")
-    elif training_args.fp16:
-        torch_dtype = torch.float16
-        print(f"Training in fp16")
+    train_dataset = TrainDataset(data_args)
+    collator = TrainCollator(data_args, tokenizer)
+
+    eval_dataset = None
+    if data_args.eval_dataset_path is not None:
+        eval_data_args = deepcopy(data_args)
+        eval_data_args.dataset_path = data_args.eval_dataset_path
+        # eval_data_args.dataset_split = "eval"
+        eval_dataset = TrainDataset(eval_data_args)
     else:
-        torch_dtype = torch.float32
-        print(f"Training in fp32")
+        training_args.eval_strategy = "no"
+        training_args.save_strategy = "epoch"
+        training_args.load_best_model_at_end = False
 
     model = DenseModel.build(
         model_args,
@@ -166,23 +171,6 @@ def main():
         attn_implementation=model_args.attn_implementation,
     )
     get_params_info(model)
-
-    train_dataset = TrainDataset(data_args)
-    collator = TrainCollator(data_args, tokenizer)
-
-    eval_dataset = None
-    if data_args.eval_dataset_path is not None:
-        eval_data_args = deepcopy(data_args)
-        eval_data_args.dataset_path = data_args.eval_dataset_path
-        eval_data_args.dataset_split = "eval"
-        eval_dataset = TrainDataset(data_args)
-    else:
-        training_args.eval_strategy = "no"
-        training_args.save_strategy = "epoch"
-        training_args.load_best_model_at_end = False
-
-    logger.info(f"Using {TrainCollator} collator and {model} model")
-
     trainer_cls = GCTrainer if training_args.grad_cache else Trainer
     trainer = trainer_cls(
         model=model,

@@ -4,8 +4,8 @@
 #SBATCH --gres=gpu:A100:1
 #SBATCH --qos=fitq
 #SBATCH --job-name=thuy0050
-#SBATCH --output=/home/thuy0050/code/MixLoraDSI/logs/slurm-%x-%j.out
-#SBATCH --error=/home/thuy0050/code/MixLoraDSI/logs/slurm-%x-%j.err
+#SBATCH --output=/home/thuy0050/code/tevatron/louis/logs/slurm-%x-%j.out
+#SBATCH --error=/home/thuy0050/code/tevatron/louis/logs/slurm-%x-%j.err
 #SBATCH --time=1-00:00:00
 
 #SBATCH --nodes=1
@@ -54,7 +54,7 @@ OUTPUT_DIR_ROOT=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron
 python /home/thuy0050/code/tevatron/louis/extract_temporal/offline_batch_inference_v2.py \
     --model_name_or_path bert-base-uncased \
     --dataset_name $DATA_ROOT_DIR/tevatron/Tevatron___msmarco-passage \
-    --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/train.jsonl \
+    --dataset_path $DATA_ROOT_DIR/temporal/temporal_nobel_prize/train/dev_for_generation.jsonl \
     --query_max_len 512 \
     --passage_max_len 512 \
     --per_device_train_batch_size 128 \

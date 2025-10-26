@@ -82,7 +82,7 @@ configs = {
         passage_prefix="''",
         query_prompts="''",
         corpus_prompts="''",
-        normalize="",
+        normalize="''",
         padding_side="right",
         matryoshka_dim="768",
         temperature="0.05",
@@ -126,6 +126,94 @@ configs = {
 }
 
 
+configs = {
+    "bge": dict(
+        checkpoint="BAAI/bge-base-en-v1.5",
+        pooling="cls",
+        query_prefix="'Represent this sentence for searching relevant passages: '",
+        passage_prefix="''",
+        query_prompts="'Represent this sentence for searching relevant passages: '",
+        corpus_prompts="''",
+        normalize="--normalize",
+        padding_side="right",
+        matryoshka_dim="768",
+        temperature="0.02",
+    ),
+    "bgem3": dict(
+        checkpoint="BAAI/bge-m3",
+        pooling="cls",
+        query_prefix="''",
+        passage_prefix="''",
+        query_prompts="''",
+        corpus_prompts="''",
+        normalize="--normalize",
+        padding_side="right",
+        matryoshka_dim="1024",
+        temperature="0.02",
+    ),
+    "contriever": dict(
+        checkpoint="facebook/contriever",
+        pooling="mean",
+        query_prefix="''",
+        passage_prefix="''",
+        query_prompts="''",
+        corpus_prompts="''",
+        normalize="''",
+        padding_side="right",
+        matryoshka_dim="768",
+        temperature="0.05",
+    ),
+    "gte": dict(
+        checkpoint="thenlper/gte-base",
+        pooling="mean",
+        query_prefix="''",
+        passage_prefix="''",
+        query_prompts="''",
+        corpus_prompts="''",
+        normalize="--normalize",
+        padding_side="right",
+        matryoshka_dim="768",
+        temperature="0.02",
+    ),
+    "tempretriever": dict(
+        checkpoint="google-bert/bert-base-uncased",
+        pooling="cls",
+        query_prefix="''",
+        passage_prefix="''",
+        query_prompts="''",
+        corpus_prompts="''",
+        normalize="--normalize",
+        padding_side="right",
+        matryoshka_dim="1536",
+        temperature="0.02",
+    ),
+    "nomic": dict(
+        checkpoint="nomic-ai/nomic-embed-text-v1.5",
+        pooling="mean",
+        query_prefix="search_query:",
+        passage_prefix="search_document:",
+        query_prompts="search_query:",
+        corpus_prompts="search_document:",
+        normalize="--normalize",
+        padding_side="right",
+        matryoshka_dim="768",
+        temperature="0.02",
+    ),
+    "qwen3": dict(
+        checkpoint="Qwen/Qwen3-Embedding-0.6B",
+        pooling="last",
+        query_prefix="'Instruct: Given a web search query, retrieve relevant passages that answer the query\\nQuery:'",
+        passage_prefix="''",
+        query_prompts="'Instruct: Given a web search query, retrieve relevant passages that answer the query\\nQuery:'",
+        corpus_prompts="search_document:",
+        normalize="--normalize",
+        padding_side="left",
+        matryoshka_dim="1024",
+        temperature="0.02",
+    ),
+}
+
+
 def main():
     """Main entry for temporal retriever training and evaluation."""
     parser = argparse.ArgumentParser(description="Temporal Retriever Training Pipeline")
@@ -135,6 +223,7 @@ def main():
         type=str,
         help="Model name, e.g. bge | bgem3 | contriever | gte | nomic | qwen3",
     )
+    parser.add_argument("--method_name", default="ts-retriever", type=str)
     parser.add_argument("--exp_name", default="dev", type=str)
     parser.add_argument(
         "--data",
@@ -145,19 +234,9 @@ def main():
         ],
         help="Dataset name",
     )
-    parser.add_argument("--enhanced_temporal", action="store_true", help="Use this flag only for temporal_nobel_prize dataset to train on our enhanced temporal queries.")
-    parser.add_argument("--eval", action="store_true", help="Eval with the corresponding dev set and also save the best model with the eval loss.", default=False)
-    parser.add_argument("--lora", action="store_true", help="Use LoRA for training.", default=False)
-    parser.add_argument("--lora_r", default=4, type=int)
-    parser.add_argument("--lora_alpha", default=4, type=int)
-
-    parser.add_argument("--learning_rate", default=1e-4, type=float)
-    parser.add_argument("--batch_size", default=256, type=int)
-    parser.add_argument("--epoch", default=5, type=int)
-    parser.add_argument("--gradient_accumulation_steps", default=1, type=int)
-    parser.add_argument("--wandb", action="store_true", default=False)
-    parser.add_argument("--gradient_checkpointing", action="store_true", default=False)
-    parser.add_argument("--num_neg", default=1, type=int)
+    parser.add_argument(
+        "--lora", action="store_true", help="Use LoRA for training.", default=False
+    )
     args = parser.parse_args()
 
     # ==== PATHS ====
@@ -165,25 +244,10 @@ def main():
     CODE_DIR = HOME / "code" / "tevatron"
     DATA_ROOT = HOME / "mg61_scratch2" / "thuy0050" / "data" / "third_work"
     OUTPUT_ROOT = HOME / "mg61_scratch2" / "thuy0050" / "exp" / "tevatron"
-    MODEL_NAME = "ts-retriever"
+    METHOD_NAME = args.method_name
 
     data_name = args.data
     exp_name = args.exp_name
-
-    eval_dataset_path = ""
-    if args.eval:
-        eval_dataset_path = f"--eval_dataset_path {DATA_ROOT}/temporal/temporal_nobel_prize/train/{'dev2' if args.enhanced_temporal else 'dev'}.jsonl"
-        # eval_dataset_path = f"--eval_dataset_path {DATA_ROOT}/temporal/temporal_nobel_prize/train/dev.jsonl"
-    else:
-        eval_dataset_path = "--save_strategy epoch --load_best_model_at_end False"
-
-    # ==== ARGUMENTS ====
-    batch_size = args.batch_size
-    epoch = args.epoch
-    num_neg = args.num_neg + 1
-    grad_accum = args.gradient_accumulation_steps
-    grad_ckpt = "--gradient_checkpointing" if args.gradient_checkpointing else ""
-    wandb = "wandb" if args.wandb else "none"
 
     # ==== MODEL CONFIG ====
     model_name = args.model
@@ -192,56 +256,25 @@ def main():
     cfg = configs[model_name]
 
     backbone = cfg["checkpoint"]
-    output_dir = OUTPUT_ROOT / data_name / MODEL_NAME / backbone / exp_name
+    output_dir = OUTPUT_ROOT / data_name / METHOD_NAME / backbone / exp_name
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    lora_train = ""
     lora_eval = ""
     if args.lora:
-        lora_train = f"--lora --lora_r {args.lora_r} --lora_alpha {args.lora_alpha} --lora_target_modules all-linear"
         lora_eval = f"--lora_name_or_path {output_dir}"
 
-    # ==== COMMANDS ====
-    train_cmd = f"""
-    python {CODE_DIR}/src/tevatron/retriever/driver/train.py \
-        --do_train \
-        --pooling {cfg['pooling']} \
-        --bf16 \
-        {cfg['normalize']} \
-        --train_group_size {num_neg} \
-        --per_device_train_batch_size {batch_size} \
-        --learning_rate {args.learning_rate} \
-        --temperature {cfg['temperature']} \
-        --logging_steps 10 \
-        --num_train_epochs {epoch} \
-        --gradient_accumulation_steps {grad_accum} \
-        {lora_train} \
-        --dataset_name {DATA_ROOT}/tevatron/Tevatron___msmarco-passage \
-        --dataset_path {DATA_ROOT}/temporal/{data_name}/train/{"train_enhanced_temporal" if args.enhanced_temporal else "train"}.jsonl \
-        {eval_dataset_path} \
-        --model_name_or_path {backbone} \
-        --run_name {backbone}_{exp_name} \
-        --output_dir {output_dir} \
-        --report_to {wandb} \
-        --query_prefix {cfg['query_prefix']} \
-        --passage_prefix {cfg['passage_prefix']} \
-        --padding_side {cfg['padding_side']} \
-        --matryoshka_dim {cfg['matryoshka_dim']} \
-        {grad_ckpt} \
-        > {output_dir}/train_log.txt
-    """
-
-    encode_corpus_cmd = f"""
-    python {CODE_DIR}/src/tevatron/retriever/driver/encode.py \
-        --per_device_eval_batch_size 512 \
+    encode_corpus_cmd = [
+        f"""python {CODE_DIR}/src/tevatron/retriever/driver/{'encode' if args.model != 'tempretriever' else 'encode_tempretriever'}.py \
+        --per_device_eval_batch_size 3072 \
         --passage_max_len 512 \
         --pooling {cfg['pooling']} \
         --bf16 \
         --normalize \
-        --dataset_name LouisDo2108/temporal-nobel-prize \
-        --dataset_config corpus \
-        --dataset_path {DATA_ROOT}/temporal/{data_name}/test/corpus.jsonl \
-        --encode_output_path {output_dir}/corpus_emb.pkl \
+        --dataset_name Tevatron/beir-corpus \
+        --dataset_config nq \
+        --encode_output_path {output_dir}/corpus_emb_beir_nq.{i}.pkl \
+        --dataset_number_of_shards 8 \
+        --dataset_shard_index {i} \
         --model_name_or_path {output_dir} \
         {lora_eval} \
         --overwrite_output_dir \
@@ -249,62 +282,58 @@ def main():
         --passage_prefix {cfg['passage_prefix']} \
         --padding_side {cfg['padding_side']} \
         --matryoshka_dim {cfg['matryoshka_dim']}
-    """
+      """
+        for i in range(8)
+    ]
+
+    # --dataloader_num_workers {4 if args.model != 'tempretriever' else 0} \
 
     encode_query_cmd = f"""
-    python {CODE_DIR}/src/tevatron/retriever/driver/encode.py \
+    python {CODE_DIR}/src/tevatron/retriever/driver/{'encode' if args.model != 'tempretriever' else 'encode_tempretriever'}.py \
         --per_device_eval_batch_size 512 \
         --query_max_len 512 \
         --pooling {cfg['pooling']} \
         --bf16 \
         --normalize \
         --encode_is_query \
-        --dataset_name LouisDo2108/temporal-nobel-prize \
-        --dataset_config query \
-        --dataset_path {DATA_ROOT}/temporal/{data_name}/test/query.jsonl \
+        --dataset_name Tevatron/beir \
+        --dataset_config nq \
+        --dataset_split 'test' \
+        --encode_output_path {output_dir}/queries_emb_beir_nq.pkl \
         --model_name_or_path {output_dir} \
         {lora_eval} \
-        --encode_output_path {output_dir}/queries_emb.pkl \
         --overwrite_output_dir \
         --query_prefix {cfg['query_prefix']} \
         --passage_prefix {cfg['passage_prefix']} \
         --padding_side {cfg['padding_side']} \
-        --matryoshka_dim {cfg['matryoshka_dim']}
-    """
+        --matryoshka_dim {cfg['matryoshka_dim']} \
+        --dataloader_num_workers {4 if args.model != 'tempretriever' else 0} \
+      """
 
     retrieval_cmd = f"""
     set -f && OMP_NUM_THREADS=12 python -m tevatron.retriever.driver.search \
-        --query_reps {output_dir}/queries_emb.pkl \
-        --passage_reps {output_dir}/corpus_emb.pkl \
-        --depth 100 \
+        --query_reps {output_dir}/queries_emb_beir_nq.pkl \
+        --passage_reps {output_dir}/corpus_emb_beir_nq.*.pkl \
+        --depth 1000 \
         --batch_size 512 \
         --save_text \
-        --save_ranking_to {output_dir}/rank.txt &&
+        --save_ranking_to {output_dir}/rank_beir_nq.txt &&
 
     python -m tevatron.utils.format.convert_result_to_trec \
-        --input {output_dir}/rank.txt \
-        --output {output_dir}/rank.trec \
+        --input {output_dir}/rank_beir_nq.txt \
+        --output {output_dir}/rank_beir_nq.trec \
         --remove_query &&
 
     python -m pyserini.eval.trec_eval -c \
-        -mP.10 -mrecall.10 -mndcg_cut.10 -M 10 -mrecip_rank -mmap \
-        {DATA_ROOT}/temporal/{data_name}/test/qrel.txt \
-        {output_dir}/rank.trec > {output_dir}/out.txt &&
-
-    python {CODE_DIR}/louis/beir_scripts/eval_nanobeir_with_sbert.py \
-        --model_name_or_path {output_dir} \
-        --nanobeir_datasets NQ \
-        --pooling {cfg['pooling']} \
-        --bf16 \
-        --query_prompts {cfg['query_prefix']} \
-        --corpus_prompts {cfg['passage_prefix']} \
-        --matryoshka_dim {cfg['matryoshka_dim']} > {output_dir}/out_nanobeir_nq.txt
+        -mrecall.100 -mndcg_cut.10 \
+        beir-v1.0.0-nq-test \
+        {output_dir}/rank_beir_nq.trec > {output_dir}/out_beir_nq.txt
     """
 
+    all_cmds = encode_corpus_cmd + [encode_query_cmd, retrieval_cmd]
+
     # ==== EXECUTION ====
-    run([train_cmd])
-    run([encode_corpus_cmd, encode_query_cmd])
-    run([retrieval_cmd])
+    run(all_cmds)
 
 if __name__ == "__main__":
     main()

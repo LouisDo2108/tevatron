@@ -51,7 +51,7 @@ class TemporalDataset(TrainDataset):
                 cache_dir=self.data_args.dataset_cache_dir,
                 num_proc=self.data_args.num_proc,
             )
-            
+
         self.passage_prefix = self.data_args.passage_prefix.replace("\\n", "\n").strip() + " "
         self.query_prefix = self.data_args.query_prefix.replace("\\n", "\n").strip() + " "
 
@@ -59,18 +59,20 @@ class TemporalDataset(TrainDataset):
         group = self.train_data[item]
         epoch = int(self.trainer.state.epoch)
         _hashed_seed = hash(item + self.trainer.args.seed)
-        
+
         """
         Note that for temporal dataset, since the "query" here is actually the passage and positive/negative "passages" are actually the "query"; 
         *** during training, we should add the passage_prefix to the "query" and query_prefix to the "passages"
         *** during evaluation/inference, they are normal.
         *** This is by swapping query_prefix and passage_prefix in the data_args.
         """
-        
+
         query_text = group['query']
         query_temporal = group['temporal']
-        
-        formatted_query = self.query_prefix + query_text
+
+        formatted_query = (
+            self.passage_prefix + query_text
+        )  # reversed role of passage_prefix and query_prefix
 
         formatted_documents = []
 
@@ -85,10 +87,10 @@ class TemporalDataset(TrainDataset):
         )
         formatted_documents.append(
             (
-                self.passage_prefix + positive_text, 
+                self.query_prefix + positive_text, # reversed role of passage_prefix and query_prefix
                 selected_positive["temporal"],
-                selected_positive["temporal_query_type"],
-                selected_positive["allen_relation"],
+                selected_positive["temporal_query_type"] if "temporal_query_type" in selected_positive else "",
+                selected_positive["allen_relation"] if "allen_relation" in selected_positive else "",
             )
         )
 
@@ -121,11 +123,10 @@ class TemporalDataset(TrainDataset):
             )
             formatted_documents.append(
                 (
-                    self.passage_prefix + negative_text,
+                    self.query_prefix + negative_text,
                     negative["temporal"],
-                    negative["temporal_query_type"],
-                    negative["allen_relation"],
+                    negative["temporal_query_type"] if "temporal_query_type" in negative else "",
+                    negative["allen_relation"] if "allen_relation" in negative else "",
                 )
             )
         return formatted_query, query_temporal, formatted_documents
-

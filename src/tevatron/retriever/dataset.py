@@ -62,6 +62,12 @@ class TrainDataset(Dataset):
             corpus_ids = self.corpus.select_columns(['docid'])
             docids = corpus_ids['docid']
             self.docid_to_index = {docid: index for index, docid in enumerate(tqdm(docids))}
+        self.passage_prefix = (
+            self.data_args.passage_prefix.replace("\\n", "\n").strip() + " "
+        )
+        self.query_prefix = (
+            self.data_args.query_prefix.replace("\\n", "\n").strip() + " "
+        )
 
     def set_trainer(self, trainer):
         """Sets the trainer for the dataset."""
@@ -110,7 +116,7 @@ class TrainDataset(Dataset):
         group = self.train_data[item]
         epoch = int(self.trainer.state.epoch)
         _hashed_seed = hash(item + self.trainer.args.seed)
-        
+
         self.data_args.passage_prefix = self.data_args.passage_prefix.replace("\\n", "\n").strip() + " "
         self.data_args.query_prefix = self.data_args.query_prefix.replace("\\n", "\n").strip() + " "
 
@@ -118,15 +124,25 @@ class TrainDataset(Dataset):
         if 'positive_passages' in group:
             query_text = group['query']
             query_image = query_video = query_audio = None
-            formatted_query = (self.data_args.query_prefix + query_text,
-                               query_image, query_video, query_audio)
+            # formatted_query = (self.data_args.query_prefix + query_text,
+            #                    query_image, query_video, query_audio)
+
+            formatted_query = (
+                self.passage_prefix + query_text,
+                query_image,
+                query_video,
+                query_audio,
+            )  # reversed role of passage_prefix and query_prefix
 
             formatted_documents = []
             # Select positive document
             selected_positive = group['positive_passages'][(_hashed_seed + epoch) % len(group['positive_passages'])]
             positive_text = (selected_positive['title'] + ' ' + selected_positive['text']
                              if 'title' in selected_positive else selected_positive['text'])
-            formatted_documents.append((self.data_args.passage_prefix + positive_text, None, None, None))
+            # formatted_documents.append((self.data_args.passage_prefix + positive_text, None, None, None))
+            formatted_documents.append(
+                (self.query_prefix + positive_text, None, None, None)
+            )
 
             # Select negative documents
             negative_size = self.data_args.train_group_size - 1
@@ -144,7 +160,12 @@ class TrainDataset(Dataset):
             for negative in selected_negatives:
                 negative_text = (negative['title'] + ' ' + negative['text']
                                  if 'title' in negative else negative['text'])
-                formatted_documents.append((self.data_args.passage_prefix + negative_text, None, None, None))
+                # formatted_documents.append(
+                #     (self.data_args.query_prefix + negative_text, None, None, None)
+                # )
+                formatted_documents.append(
+                    (self.query_prefix + negative_text, None, None, None)
+                )
 
             return formatted_query, formatted_documents
 

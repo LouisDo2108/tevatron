@@ -1,10 +1,12 @@
 import logging
 import os
+import random
 import sys
 from copy import deepcopy
 from dataclasses import asdict
 from pathlib import Path
 from pdb import set_trace as st
+from pprint import pformat, pprint
 
 import numpy as np
 import wandb
@@ -87,8 +89,8 @@ def main():
     if data_args.eval_dataset_path is not None:
         eval_data_args = deepcopy(data_args)
         eval_data_args.dataset_path = data_args.eval_dataset_path
-        eval_data_args.dataset_split = "eval"
-        eval_dataset = TrainDataset(data_args)
+        # eval_data_args.dataset_split = "eval"
+        eval_dataset = TrainDataset(eval_data_args)
     else:
         training_args.eval_strategy = "no"
         training_args.save_strategy = "epoch"
@@ -102,7 +104,6 @@ def main():
         attn_implementation=model_args.attn_implementation,
     )
     get_params_info(model)
-
     trainer_cls = GCTrainer if training_args.grad_cache else Trainer
     trainer = trainer_cls(
         model=model,
@@ -112,6 +113,7 @@ def main():
         data_collator=collator,
     )
     train_dataset.set_trainer(trainer)
+
     if eval_dataset is not None:
         eval_dataset.set_trainer(trainer)
 

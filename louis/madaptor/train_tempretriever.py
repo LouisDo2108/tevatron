@@ -46,11 +46,11 @@ def get_params_info(model):
 
 
 # def select_collators_and_models(model_args, data_args, training_args):
-    
+
 #     # Check if this is normal TS-Retriever style training
 #     if not training_args.matryoshka:
 #         return collator_dict["tevatron_standard"], DenseModel
-    
+
 #     if training_args.temporal:
 #         if training_args.temporal_as_sentence:
 #             return collator_dict["temporal_as_sentence"], NaiveTemporal
@@ -88,17 +88,6 @@ def main():
     else:
         tokenizer.padding_side = "left"
 
-    # model = Model.build(
-    #     model_args,
-    #     training_args,
-    #     torch_dtype=default_config.torch_dtype,
-    #     cache_dir=model_args.cache_dir,
-    #     attn_implementation=model_args.attn_implementation,
-    # )
-
-    # train_dataset = TrainDataset(data_args)
-    # collator = TrainCollator(data_args, tokenizer)
-
     model = TempRetriever.build(
         model_args,
         training_args,
@@ -119,13 +108,13 @@ def main():
         eval_data_args = deepcopy(data_args)
         eval_data_args.dataset_path = data_args.eval_dataset_path
         eval_data_args.dataset_split = "eval"
-        eval_dataset = TrainDataset(data_args)
+        eval_dataset = TrainDataset(eval_data_args)
     else:
         training_args.eval_strategy = "no"
         training_args.save_strategy = "epoch"
         training_args.load_best_model_at_end = False
 
-    logger.info(f"Using {collator} collator and {model} model")
+    # logger.info(f"Using {collator} collator and {model} model")
 
     trainer_cls = GCTrainer if training_args.grad_cache else Trainer
     trainer = trainer_cls(

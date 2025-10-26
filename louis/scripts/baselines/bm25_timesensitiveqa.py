@@ -48,7 +48,7 @@ def write_json(file_path, data, jsonl=False):
 
 
 corpus = read_json(
-    "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/explitcit/time-sensitive-qa/test/corpus.jsonl",
+    "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/time_sensitive_qa/test/corpus.jsonl",
     jsonl=True,
 )
 corpus_records = [{"id": x["docid"], "title": "", "text": x["text"]} for x in corpus]
@@ -64,7 +64,7 @@ corpus_tokens = tokenizer.tokenize(corpus_lst, return_as="tuple")
 retriever = bm25s.BM25(corpus=corpus_records, backend="numba")
 retriever.index(corpus_tokens)
 
-index_dir = "/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron/timesensitiveqa/bm25"
+index_dir = "/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron/time_sensitive_qa/bm25"
 
 retriever.save(index_dir)
 tokenizer.save_vocab(index_dir)
@@ -76,7 +76,7 @@ print(f"Peak memory usage: {mem_use:.2f} GB")
 
 
 queries = read_json(
-    "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/explitcit/time-sensitive-qa/test/query.jsonl",
+    "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/time_sensitive_qa/test_with_unanswerable/query.jsonl",
     jsonl=True,
 )
 

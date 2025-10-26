@@ -1,8 +1,16 @@
+import logging
 import argparse
 from sentence_transformers import models, SentenceTransformer
 from sentence_transformers.evaluation import NanoBEIREvaluator
 from pdb import set_trace as st
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
+    datefmt="%m/%d/%Y %H:%M:%S",
+    level=logging.INFO,
+)
 
 def main():
     parser = argparse.ArgumentParser(description="Run NanoBEIR evaluation.")
@@ -37,15 +45,16 @@ def main():
     )
 
     args = parser.parse_args()
+    logger.info("Start NanoBEIR evaluation")
 
     torch_dtype = "bf16" if args.bf16 else "fp16"
-    print(f"Inference in {torch_dtype}")
+    logger.info(f"Inference in {torch_dtype}")
 
     if args.pooling == "avg":
         args.pooling = "mean"
     if args.pooling == "last":
         args.pooling = "lasttoken"
-    print(f"Pooling method: {args.pooling}")
+    logger.info(f"Pooling method: {args.pooling}")
 
     # Load the transformer and SentenceTransformer model
     transformer_model = models.Transformer.load(
@@ -100,8 +109,6 @@ def main():
     args.query_prompts =args.query_prompts.replace("\\n", "\n")
     args.corpus_prompts = args.corpus_prompts.replace("\\n", "\n")
 
-    from transformers import AutoTokenizer
-
     # Set up and run the evaluator
     evaluator = NanoBEIREvaluator(
         dataset_names=args.nanobeir_datasets,
@@ -110,9 +117,7 @@ def main():
         truncate_dim=args.matryoshka_dim,
     )
     results = evaluator(model)
-
-    print("Primary Metric:", evaluator.primary_metric)
-    print("Score:", results[evaluator.primary_metric])
+    print(f"{evaluator.primary_metric}: {results[evaluator.primary_metric]:.3f}")
 
 
 if __name__ == "__main__":

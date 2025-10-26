@@ -217,7 +217,7 @@ class TevatronTrainingArguments(TrainingArguments):
     grad_cache: bool = field(default=False, metadata={"help": "Use gradient cache update"})
     gc_q_chunk_size: int = field(default=4)
     gc_p_chunk_size: int = field(default=32)
-    dataloader_num_workers: int = field(default=0)
+    dataloader_num_workers: int = field(default=4)
     tf32: bool = field(default=True)
     report_to: str = field(default="none") # wandb
     save_total_limit: int = field(default=1)
@@ -251,6 +251,7 @@ class TevatronTrainingArguments(TrainingArguments):
     # extracted_temporal: bool = field(default=False)
 
     matryoshka_dim: int = field(default=768)
+    matryoshka_dim_list: List[int] = field(default_factory=lambda:[768])
 
     # This will enable the loss for the temporal embedding subspace.
     temporal: bool = field(default=False)  
@@ -274,3 +275,5 @@ class TevatronTrainingArguments(TrainingArguments):
     load_best_model_at_end: bool = field(default=True)
     prediction_loss_only: bool = field(default=True)
     per_device_eval_batch_size: int = field(default=512)
+    metric_for_best_model: str = field(default="eval_recall@1")
+    greater_is_better: bool = field(default=True)

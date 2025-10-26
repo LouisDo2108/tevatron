@@ -35,12 +35,12 @@ cd /home/thuy0050/code/tevatron
 
 DATA_ROOT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/data/third_work
 
-# # Temporal nobel prize
-# DATA_NAME=temporal_nobel_prize
-# OUTPUT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron/$DATA_NAME/bm25
-# mkdir -p $OUTPUT_DIR
+# Temporal nobel prize
+DATA_NAME=temporal_nobel_prize
+OUTPUT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron/$DATA_NAME/bm25
+mkdir -p $OUTPUT_DIR
 
-# python /home/thuy0050/code/tevatron/louis/scripts/baselines/bm25_temporal_nobel_prize.py
+python /home/thuy0050/code/tevatron/louis/scripts/baselines/bm25_temporal_nobel_prize.py
 
 # # ==== CONVERT TO TREC FORMAT ====  
 # python -m tevatron.utils.format.convert_result_to_trec \
@@ -56,7 +56,7 @@ DATA_ROOT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/data/third_work
 #   $OUTPUT_DIR/rank.trec
 
 # ========= Time sensitve qa ==========
-DATA_NAME=timesensitiveqa
+DATA_NAME=time_sensitive_qa
 OUTPUT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron/$DATA_NAME/bm25
 mkdir -p $OUTPUT_DIR
 
@@ -72,7 +72,7 @@ python -m tevatron.utils.format.convert_result_to_trec \
 # Note that the M here will set the @k (i.e., @M) of mrr and map, by default, if not set, M=100
 python -m pyserini.eval.trec_eval -c \
   -mP.10 -mrecall.10 -mndcg_cut.10 -M 10 -mrecip_rank -mmap \
-  $DATA_ROOT_DIR/temporal/explitcit/time-sensitive-qa/test/qrel.txt \
+  $DATA_ROOT_DIR/temporal/time_sensitive_qa/test_with_unanswerable/qrel.txt \
   $OUTPUT_DIR/rank.trec
 
 # # ========= NanoBEIR NQ==========

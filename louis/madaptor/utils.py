@@ -118,8 +118,9 @@ def init():
         bool(training_args.local_rank != -1),
         training_args.fp16,
     )
-    logger.info("Training/evaluation parameters %s", training_args)
-    logger.info("MODEL parameters %s", model_args)
+    logger.info("\n##### Training/evaluation arguments #####\n %s\n", training_args)
+    logger.info("\n ##### Model arguments #####\n %s\n", model_args)
+    logger.info("\n ##### Data arguments #####\n %s\n", data_args)
 
     set_seed(training_args.seed)
 

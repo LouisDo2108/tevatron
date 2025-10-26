@@ -1,3 +1,4 @@
+import os
 import glob
 import logging
 import pickle
@@ -66,6 +67,7 @@ def main():
 
     p_reps_0, p_lookup_0 = pickle_load(index_files[0])
     retriever = FaissFlatSearcher(p_reps_0)
+    print("p_reps_0 shape:", p_reps_0.shape)
 
     shards = chain([(p_reps_0, p_lookup_0)], map(pickle_load, index_files[1:]))
     if len(index_files) > 1:
@@ -77,23 +79,28 @@ def main():
 
     q_reps, q_lookup = pickle_load(args.query_reps)
     q_reps = q_reps
+    print("q_reps shape:", q_reps.shape)
 
-    num_gpus = faiss.get_num_gpus()
-    if num_gpus == 0:
-        logger.info("No GPU found or using faiss-cpu. Back to CPU.")
-    else:
-        logger.info(f"Using {num_gpus} GPU")
-        if num_gpus == 1:
-            co = faiss.GpuClonerOptions()
-            co.useFloat16 = True
-            res = faiss.StandardGpuResources()
-            retriever.index = faiss.index_cpu_to_gpu(res, 0, retriever.index, co)
+    try:
+        num_gpus = faiss.get_num_gpus()
+        if num_gpus == 0:
+            logger.info("No GPU found or using faiss-cpu. Back to CPU.")
         else:
-            co = faiss.GpuMultipleClonerOptions()
-            co.shard = True
-            co.useFloat16 = True
-            retriever.index = faiss.index_cpu_to_all_gpus(retriever.index, co,
-                                                     ngpu=num_gpus)
+            logger.info(f"Using {num_gpus} GPU")
+            if num_gpus == 1:
+                co = faiss.GpuClonerOptions()
+                co.useFloat16 = True
+                res = faiss.StandardGpuResources()
+                retriever.index = faiss.index_cpu_to_gpu(res, 0, retriever.index, co)
+            else:
+                co = faiss.GpuMultipleClonerOptions()
+                co.shard = True
+                co.useFloat16 = True
+                retriever.index = faiss.index_cpu_to_all_gpus(retriever.index, co,
+                                                        ngpu=num_gpus)
+    except Exception as e:
+
+        logger.warning(f"Faiss GPU loading failed, the error is {e}.\nBack to CPU..")
 
     logger.info('Index Search Start')
     all_scores, psg_indices = search_queries(retriever, q_reps, look_up, args)

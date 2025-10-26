@@ -163,7 +163,7 @@ class PredictionHeadTransform(nn.Module):
         return hidden_states
 
 
-class TemporalProjectorWithReconstructionLoss(nn.Module):
+class TemporalProjector(nn.Module):
     """
     Copy from modeling_bert.py's BertLMP redictionHead
     """
@@ -201,7 +201,7 @@ class NaiveTemporal(DenseModel):
     def __init__(self, *args, **kwargs):
         super(NaiveTemporal, self).__init__(*args, **kwargs)
 
-        self.matryoshka_dim_list = sorted([256, 512, 768], reverse=True)
+        self.matryoshka_dim_list = sorted(self.training_args.matryoshka_dim_list, reverse=True)
         self.temporal = self.training_args.temporal
         self.temporal_dim = self.training_args.temporal_dim
         self.max_temporal_length = self.training_args.max_temporal_length
@@ -313,9 +313,13 @@ class NaiveTemporal(DenseModel):
 class TemporalProjectorReconstruction(NaiveTemporal):
     def __init__(self, *args, **kwargs):
         super(TemporalProjectorReconstruction, self).__init__(*args, **kwargs)
-        self.temporal_projector = TemporalProjectorWithReconstructionLoss(
-            self.config, self.temporal_dim, reconstruction=self.temporal_reconstruction
-        )
+        
+        if self.temporal or self.temporal_reconstruction:
+            self.temporal_projector = TemporalProjector(
+                self.config, self.temporal_dim, reconstruction=self.temporal_reconstruction
+            )
+        else:
+            self.temporal_projector = nn.Identity()
 
     def forward(
         self,
@@ -373,8 +377,8 @@ class TemporalProjectorReconstruction(NaiveTemporal):
             return losses
         else:
             # Copy from EncoderModel's forward
-            q_reps = self.encode(query, query_flag=True) if query else None
-            p_reps = self.encode(passage, query_flag=False) if passage else None
+            q_reps = self.encode(query, temporal_span_list=None, is_query=True) if query else None
+            p_reps = self.encode(query, temporal_span_list=None, is_query=False) if passage else None
 
             # for inference
             if q_reps is None or p_reps is None:
@@ -620,7 +624,7 @@ class TemporalProjectorReconstruction(NaiveTemporal):
 
         return total_loss, partial_losses
 
-    def encode(self, q, temporal_span_list, num_neg, is_query=True):
+    def encode(self, q, temporal_span_list=None, num_neg=1, is_query=True):
 
         # if self.encoder.name_or_path != "jinaai/jina-embeddings-v3":
         #   query_hidden_states = self.encoder(**q, return_dict=True)
@@ -708,11 +712,10 @@ class TempRetriever(NaiveTemporal):
     ):
         if self.training:
             q, qt = query
-            p, pt, pt_query_type_list, p_allen_relation_list = passage
-            num_neg = p["input_ids"].size(0) // q["input_ids"].size(0)
+            p, pt = passage
 
-            q_reps, qt_reps = self.encode(q, qt, num_neg, is_query=True)
-            p_reps, pt_reps = self.encode(p, pt, num_neg, is_query=False)
+            q_reps, qt_reps = self.encode(q, qt)
+            p_reps, pt_reps = self.encode(p, pt)
 
             loss, loss_partial = self.compute_loss(
                 q_reps,
@@ -778,14 +781,5 @@ class TempRetriever(NaiveTemporal):
 
         total_loss += loss
         partial_losses["loss"] = loss
-
-        # scores_temporal = self.compute_similarity(qt_reps, pt_reps)
-        # scores_temporal = scores_temporal.view(qt_reps.size(0), -1)
-        # loss_temporal = self.cross_entropy(scores_temporal / self.temperature, target)
-
-        # total_loss += loss_temporal
-
-        # partial_losses["loss_semantic"] = loss.detach().clone()
-        # partial_losses["loss_temporal"] = loss_temporal.detach().clone()
 
         return total_loss, partial_losses
