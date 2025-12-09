@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from typing import List, Tuple
 
 from PIL import Image
-from qwen_vl_utils import process_vision_info
 from transformers import PreTrainedTokenizer, ProcessorMixin
 
 from tevatron.retriever.arguments import DataArguments
@@ -18,6 +17,7 @@ class TrainCollator:
     """
     data_args: DataArguments
     tokenizer: PreTrainedTokenizer
+    max_temporal_length: int = 16
 
     def __call__(self, features: List[Tuple[str, List[str]]]):
         """

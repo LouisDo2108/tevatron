@@ -678,12 +678,11 @@ def main():
         temporal_jsonl.extend(temp)
 
         if (ix+1) % 10 == 0:
-            write_json(f"/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/explitcit/time-sensitive-qa/{counter}.jsonl",temporal_jsonl,jsonl=True)
+            write_json(f"/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/time_sensitive_qa/development/{counter}.jsonl",temporal_jsonl,jsonl=True)
             temporal_jsonl = []
             counter += 1
-            return
 
-    write_json(f"/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/explitcit/time-sensitive-qa/{counter}.jsonl",temporal_jsonl,jsonl=True)
+    write_json(f"/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/time_sensitive_qa/development/{counter}.jsonl",temporal_jsonl,jsonl=True)
     
     del llm
     cleanup_dist_env_and_memory()

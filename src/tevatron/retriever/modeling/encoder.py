@@ -14,6 +14,7 @@ from transformers.file_utils import ModelOutput
 
 from tevatron.retriever.arguments import ModelArguments
 from tevatron.retriever.arguments import TevatronTrainingArguments as TrainingArguments
+import safetensors.torch
 
 from pdb import set_trace as st 
 
@@ -45,6 +46,7 @@ class EncoderModel(nn.Module):
         self.pooling = pooling
         self.normalize = normalize
         self.temperature = temperature
+        self.adaptor = None
         self.cross_entropy = nn.CrossEntropyLoss(reduction='mean')
         self.is_ddp = dist.is_initialized()
         self._keys_to_ignore_on_save = None
@@ -112,7 +114,10 @@ class EncoderModel(nn.Module):
         return self.cross_entropy(scores, target)
 
     def gradient_checkpointing_enable(self, **kwargs):
-        self.encoder.model.gradient_checkpointing_enable()
+        try: 
+            self.encoder.model.gradient_checkpointing_enable()
+        except Exception as e:
+            self.encoder.gradient_checkpointing_enable()
 
     def _dist_gather_tensor(self, t: Optional[torch.Tensor]):
         if t is None:
@@ -198,6 +203,7 @@ class EncoderModel(nn.Module):
              pooling: str = 'cls',
              normalize: bool = False,
              lora_name_or_path: str = None,
+             training_args: TrainingArguments = None,
              **hf_kwargs):
         """
         Slightly modify how to load the LoRA fine-tuned model to disable this warning: 
@@ -227,7 +233,8 @@ class EncoderModel(nn.Module):
             model = cls(
                 encoder=lora_model,
                 pooling=pooling,
-                normalize=normalize
+                normalize=normalize,
+                training_args=training_args,
             )
         else:
             logger.info(" This is not a PEFT model!!! ")
@@ -235,7 +242,8 @@ class EncoderModel(nn.Module):
             model = cls(
                 encoder=base_model,
                 pooling=pooling,
-                normalize=normalize
+                normalize=normalize,
+                training_args=training_args,
             )
         # print("Please provide lora_name_or_path to load the PEFT model correctly!!!")
         return model
@@ -245,22 +253,31 @@ class EncoderModel(nn.Module):
         try:
             hf_kwargs["attn_implementation"] = "flash_attention_2"
             base_model = cls.TRANSFORMER_CLS.from_pretrained(
-                    model_name_or_path, 
-                    trust_remote_code=True,
-                    weights_only=False,
-                    **hf_kwargs
-                )
+                model_name_or_path, 
+                trust_remote_code=True,
+                weights_only=False,
+                **hf_kwargs
+            )
             logger.info("Using flash attention 2!")
         except Exception as e:
-            # logger.exception(e)
-            hf_kwargs["attn_implementation"] = "sdpa"
-            base_model = cls.TRANSFORMER_CLS.from_pretrained(
+            try:
+                hf_kwargs["attn_implementation"] = "sdpa"
+                logger.info(f"Fall back to use {hf_kwargs['attn_implementation']}")
+                base_model = cls.TRANSFORMER_CLS.from_pretrained(
                     model_name_or_path, 
                     weights_only=False,
                     trust_remote_code=True,
                     **hf_kwargs
                 )
-            logger.info(f"Fall back to use {hf_kwargs['attn_implementation']}")
+            except ValueError as e:
+                hf_kwargs["attn_implementation"] = "eager"
+                logger.info(f"Fall back to use {hf_kwargs['attn_implementation']}")
+                base_model = cls.TRANSFORMER_CLS.from_pretrained(
+                    model_name_or_path, 
+                    weights_only=False,
+                    trust_remote_code=True,
+                    **hf_kwargs
+                )
 
         if base_model.config.pad_token_id is None:
             base_model.config.pad_token_id = 0

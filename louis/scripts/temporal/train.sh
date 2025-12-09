@@ -1,8 +1,21 @@
 #!/bin/bash
+
+## FOR PARTITION GPU, A100
+##SBATCH --partition=gpu
+##SBATCH --gres=gpu:A100:1
+##SBATCH --nodelist=m3n100,m3n101,m3n102,m3n103,m3n104,m3n105,m3n106,m3n107,m3n108,m3n109,m3n110,m3n111,m3n112
+
+## FOR PARTITION GPU, L40S
+## SBATCH --partition=gpu
+## SBATCH --gres=gpu:L40S:1
+
+## FOR FIT PARTITION
 #SBATCH --partition=fit
-#SBATCH --account=ft49
+#SBATCH --nodelist=m3u000,m3u001,m3u002,m3u003,m3u004,m3u005,m3u006,m3u007,m3u008
 #SBATCH --gres=gpu:A100:1
 #SBATCH --qos=fitq
+
+#SBATCH --account=mg61
 #SBATCH --job-name=thuy0050
 #SBATCH --output=/home/thuy0050/code/tevatron/louis/logs/slurm-%x-%j.out
 #SBATCH --error=/home/thuy0050/code/tevatron/louis/logs/slurm-%x-%j.err
@@ -11,7 +24,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=16
 #SBATCH --mem=256G
 
 #SBATCH --mail-user=tuan.huynh1@monash.edu
@@ -20,8 +33,6 @@
 # ==== ENVIRONMENT SETUP ====
 source ~/.bashrc
 conda activate tevatron
-
-ulimit -n 4096
 
 export CUDA_VISIBLE_DEVICES=0
 # export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
@@ -36,66 +47,180 @@ export PYTORCH_CUDA_ALLOC_CONF=garbage_collection_threshold:0.6
 cd /home/thuy0050/code/tevatron
 
 python louis/scripts/temporal/train.py \
+    --model contriever \
+    --data temporal_nobel_prize \
+    --exp_name temporal_filtered \
+    --matryoshka_dim 768 \
+    --matryoshka_dim_list 128 256 512 768 \
+    --batch_size 256 \
+    --eval_batch_size 256 \
+    --num_neg 4 \
+    --eval \
+    --lora \
+    --enhanced_temporal \
+    --temporal \
+    --pt 0.1 \
+    --qt 0.1 \
+    --filter_false_negatives \
+    --detach_temporal
+
+python louis/scripts/temporal/eval.py \
+    --model contriever \
+    --data temporal_nobel_prize \
+    --exp_name temporal_filtered \
+    --matryoshka_dim_list 64 128 256 512 \
+    --lora
+
+
+python louis/scripts/temporal/train.py \
+    --model gte \
+    --data temporal_nobel_prize \
+    --exp_name temporal_filtered \
+    --matryoshka_dim 768 \
+    --matryoshka_dim_list 128 256 512 768 \
+    --batch_size 256 \
+    --eval_batch_size 256 \
+    --num_neg 4 \
+    --eval \
+    --lora \
+    --enhanced_temporal \
+    --temporal \
+    --pt 0.1 \
+    --qt 0.1 \
+    --filter_false_negatives \
+    --detach_temporal
+
+python louis/scripts/temporal/eval.py \
+    --model gte \
+    --data temporal_nobel_prize \
+    --exp_name temporal_filtered \
+    --matryoshka_dim_list 64 128 256 512 \
+    --lora
+
+
+python louis/scripts/temporal/train.py \
     --model bge \
     --data temporal_nobel_prize \
-    --exp_name dev3 \
-    --enhanced_temporal \
-    --lora \
-    --eval \
+    --exp_name temporal_filtered \
+    --matryoshka_dim 768 \
+    --matryoshka_dim_list 128 256 512 768 \
     --batch_size 256 \
-    --num_neg 1 \
-    --epoch 5
-    # --matryoshka_dim_list 768 \
-    # --temporal \
-    # --temporal_reconstruction \
-    # --pt 1.0 \
-    # --qt 1.0 \
-    # --qt_recon 1.0 \
-    # --pt_recon 1.0 \
+    --eval_batch_size 256 \
+    --num_neg 4 \
+    --eval \
+    --lora \
+    --enhanced_temporal \
+    --temporal \
+    --pt 0.1 \
+    --qt 0.1 \
+    --filter_false_negatives \
+    --detach_temporal
 
-# python louis/scripts/temporal/train.py \
-#     --model bge \
-#     --data time_sensitive_qa \
-#     --exp_name dev \
-#     --lora \
-#     --eval \
-#     --batch_size 256 \
-#     --num_neg 1 \
-#     --epoch 5 \
-#     --matryoshka_dim_list 256 768 \
-#     --temporal \
-#     --temporal_reconstruction \
-#     --pt 1.0 \
-#     --qt 1.0 \
-#     --qt_recon 1.0 \
-#     --pt_recon 1.0 \
-    
-# # python louis/scripts/temporal/train.py \
-# #     --model bge \
-# #     --data temporal_nobel_prize \
-# #     --exp_name baseline_recon \
-# #     --lora \
-# #     --enhanced_temporal \
-# #     --eval \
-# #     --batch_size 256 \
-# #     --num_neg 1 \
-# #     --epoch 5 \
-# #     --pt 1.0 \
-# #     --qt 1.0 \
-# #     --qt_recon 1.0 \
-# #     --pt_recon 1.0
+python louis/scripts/temporal/eval.py \
+    --model bge \
+    --data temporal_nobel_prize \
+    --exp_name temporal_filtered \
+    --matryoshka_dim_list 64 128 256 512 \
+    --lora
 
-# # python louis/scripts/temporal/train.py \
-# #     --model bge \
-# #     --data time_sensitive_qa \
-# #     --exp_name baseline_recon \
-# #     --lora \
-# #     --enhanced_temporal \
-# #     --eval \
-# #     --batch_size 256 \
-# #     --num_neg 1 \
-# #     --epoch 5 \
-# #     --pt 1.0 \
-# #     --qt 1.0 \
-# #     --qt_recon 1.0 \
-# #     --pt_recon 1.0
+python louis/scripts/temporal/train.py \
+    --model nomic \
+    --data temporal_nobel_prize \
+    --exp_name temporal_filtered \
+    --matryoshka_dim 768 \
+    --matryoshka_dim_list 128 256 512 768 \
+    --batch_size 256 \
+    --eval_batch_size 256 \
+    --num_neg 4 \
+    --eval \
+    --lora \
+    --enhanced_temporal \
+    --temporal \
+    --pt 0.1 \
+    --qt 0.1 \
+    --filter_false_negatives \
+    --detach_temporal
+
+python louis/scripts/temporal/eval.py \
+    --model nomic \
+    --data temporal_nobel_prize \
+    --exp_name temporal_filtered \
+    --matryoshka_dim_list 64 128 256 512 \
+    --lora
+
+python louis/scripts/temporal/train.py \
+    --model gte1.5 \
+    --data temporal_nobel_prize \
+    --exp_name temporal_filtered \
+    --matryoshka_dim 768 \
+    --matryoshka_dim_list 128 256 512 768 \
+    --batch_size 256 \
+    --eval_batch_size 256 \
+    --num_neg 4 \
+    --eval \
+    --lora \
+    --enhanced_temporal \
+    --temporal \
+    --pt 0.1 \
+    --qt 0.1 \
+    --filter_false_negatives \
+    --detach_temporal
+
+python louis/scripts/temporal/eval.py \
+    --model gte1.5 \
+    --data temporal_nobel_prize \
+    --exp_name temporal_filtered \
+    --matryoshka_dim_list 64 128 256 512 \
+    --lora
+
+python louis/scripts/temporal/train.py \
+    --model bgem3 \
+    --data temporal_nobel_prize \
+    --exp_name temporal_filtered \
+    --matryoshka_dim 768 \
+    --matryoshka_dim_list 128 256 512 768 \
+    --batch_size 256 \
+    --eval_batch_size 256 \
+    --num_neg 4 \
+    --eval \
+    --lora \
+    --enhanced_temporal \
+    --temporal \
+    --pt 0.1 \
+    --qt 0.1 \
+    --gradient_checkpointing \
+    --filter_false_negatives \
+    --detach_temporal
+
+python louis/scripts/temporal/eval.py \
+    --model bgem3 \
+    --data temporal_nobel_prize \
+    --exp_name temporal_filtered \
+    --matryoshka_dim_list 64 128 256 512 \
+    --lora
+
+python louis/scripts/temporal/train.py \
+    --model qwen3 \
+    --data temporal_nobel_prize \
+    --exp_name temporal_filtered \
+    --matryoshka_dim 768 \
+    --matryoshka_dim_list 128 256 512 768 \
+    --batch_size 64 \
+    --eval_batch_size 128 \
+    --num_neg 4 \
+    --eval \
+    --lora \
+    --enhanced_temporal \
+    --temporal \
+    --pt 0.1 \
+    --qt 0.1 \
+    --gradient_checkpointing \
+    --filter_false_negatives \
+    --detach_temporal
+
+python louis/scripts/temporal/eval.py \
+    --model qwen3 \
+    --data temporal_nobel_prize \
+    --exp_name temporal_filtered \
+    --matryoshka_dim_list 64 128 256 512 \
+    --lora

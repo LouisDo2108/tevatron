@@ -677,7 +677,7 @@ def main():
 
     write_json(f"/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/temporal_nobel_prize/train/{counter}_dev.jsonl",temporal_jsonl,jsonl=True)
     
-    # del llm
+    del llm
     cleanup_dist_env_and_memory()
 
 

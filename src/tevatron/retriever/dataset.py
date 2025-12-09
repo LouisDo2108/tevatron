@@ -3,7 +3,7 @@ import os
 import random
 from typing import List, Tuple
 
-from datasets import load_dataset, load_from_disk
+from datasets import load_dataset
 from PIL import Image
 from torch.utils.data import Dataset
 from tqdm import tqdm
@@ -62,12 +62,14 @@ class TrainDataset(Dataset):
             corpus_ids = self.corpus.select_columns(['docid'])
             docids = corpus_ids['docid']
             self.docid_to_index = {docid: index for index, docid in enumerate(tqdm(docids))}
-        self.passage_prefix = (
-            self.data_args.passage_prefix.replace("\\n", "\n").strip() + " "
-        )
-        self.query_prefix = (
-            self.data_args.query_prefix.replace("\\n", "\n").strip() + " "
-        )
+            
+        self.passage_prefix = self.data_args.passage_prefix.replace("\\n", "\n").strip()
+        if self.data_args.passage_prefix != "":
+            self.passage_prefix = self.passage_prefix + " "
+            
+        self.query_prefix = self.data_args.query_prefix.replace("\\n", "\n").strip()
+        if self.data_args.query_prefix != "":
+            self.query_prefix = self.query_prefix + " "
 
     def set_trainer(self, trainer):
         """Sets the trainer for the dataset."""
@@ -117,9 +119,6 @@ class TrainDataset(Dataset):
         epoch = int(self.trainer.state.epoch)
         _hashed_seed = hash(item + self.trainer.args.seed)
 
-        self.data_args.passage_prefix = self.data_args.passage_prefix.replace("\\n", "\n").strip() + " "
-        self.data_args.query_prefix = self.data_args.query_prefix.replace("\\n", "\n").strip() + " "
-
         # Handling the legacy format with 'positive_passages'
         if 'positive_passages' in group:
             query_text = group['query']
@@ -146,10 +145,10 @@ class TrainDataset(Dataset):
 
             # Select negative documents
             negative_size = self.data_args.train_group_size - 1
-            if len(group['negative_passages']) < negative_size:
-                selected_negatives = random.choices(group['negative_passages'], k=negative_size)
-            elif self.data_args.train_group_size == 1:
+            if group.get("negative_passages", None) is None or self.data_args.train_group_size == 1:
                 selected_negatives = []
+            elif len(group['negative_passages']) < negative_size:
+                selected_negatives = random.choices(group['negative_passages'], k=negative_size)
             else:
                 offset = epoch * negative_size % len(group['negative_passages'])
                 selected_negatives = list(group['negative_passages'])
@@ -289,8 +288,8 @@ class EncodeDataset(Dataset):
         self.encode_data = load_dataset(
             self.data_args.dataset_name,
             self.data_args.dataset_config,
-            data_files=self.data_args.dataset_path,
             split=self.data_args.dataset_split,
+            data_files=self.data_args.dataset_path,
             cache_dir=self.data_args.dataset_cache_dir,
             num_proc=self.data_args.num_proc,
         )
@@ -299,15 +298,25 @@ class EncodeDataset(Dataset):
                 num_shards=self.data_args.dataset_number_of_shards,
                 index=self.data_args.dataset_shard_index,
             )
+            
+        # if self.data_args.dataset_config == "corpus":
+        #     logger.info(f"Number of samples in arguments: {data_args.num_samples}")
+        #     self.encode_data = self.encode_data.select(range(data_args.num_samples))
+        #     logger.info(f"Number of samples in reality: {len(self.encode_data)}")
+            
+        self.passage_prefix = self.data_args.passage_prefix.replace("\\n", "\n").strip()
+        if self.passage_prefix != "":
+            self.passage_prefix += " "
+            
+        self.query_prefix = self.data_args.query_prefix.replace("\\n", "\n").strip()
+        if self.query_prefix != "":
+            self.query_prefix += " "
 
     def __len__(self):
         return len(self.encode_data)
 
     def __getitem__(self, item):
         content = self.encode_data[item]
-        
-        self.data_args.passage_prefix = self.data_args.passage_prefix.replace("\\n", "\n").strip() + " "
-        self.data_args.query_prefix = self.data_args.query_prefix.replace("\\n", "\n").strip() + " "
         
         if self.data_args.encode_is_query:
             # content_id = content['query_id']
@@ -317,7 +326,7 @@ class EncodeDataset(Dataset):
             content_text = content.get('query_text', content.get('query', ''))
             if content_text == '':
                 content_text = content.get("text", "")  # For NanoNQ
-            content_text = self.data_args.query_prefix + content_text
+            content_text = self.data_args.query_prefix + content_text.strip()
             content_image = content.get('query_image', None)
             content_video = content.get('query_video', None)
             content_audio = content.get('query_audio', None)

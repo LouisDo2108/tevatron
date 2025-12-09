@@ -19,7 +19,6 @@
 
 # ==== ENVIRONMENT SETUP ====
 source ~/.bashrc
-conda activate tevatron
 
 export CUDA_VISIBLE_DEVICES=0
 # export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
@@ -35,13 +34,15 @@ cd /home/thuy0050/code/tevatron
 
 DATA_ROOT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/data/third_work
 
-# Temporal nobel prize
-DATA_NAME=temporal_nobel_prize
-OUTPUT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron/$DATA_NAME/bm25
-mkdir -p $OUTPUT_DIR
+# ========= Temporal Nobel Prize ==========
+# DATA_NAME=temporal_nobel_prize
+# OUTPUT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron/$DATA_NAME/bm25
+# mkdir -p $OUTPUT_DIR
 
-python /home/thuy0050/code/tevatron/louis/scripts/baselines/bm25_temporal_nobel_prize.py
+# python /home/thuy0050/code/tevatron/louis/scripts/baselines/bm25_temporal_nobel_prize.py
 
+
+# mamba activate bm25s
 # # ==== CONVERT TO TREC FORMAT ====  
 # python -m tevatron.utils.format.convert_result_to_trec \
 #     --input $OUTPUT_DIR/rank.txt \
@@ -51,17 +52,21 @@ python /home/thuy0050/code/tevatron/louis/scripts/baselines/bm25_temporal_nobel_
 # # ==== EVALUATE RESULTS USING PYSERINI ====
 # # Note that the M here will set the @k (i.e., @M) of mrr and map, by default, if not set, M=100
 # python -m pyserini.eval.trec_eval -c \
-#   -mP.10 -mrecall.10 -mndcg_cut.10 -M 10 -mrecip_rank -mmap \
+#   -m recall.10,100 -m ndcg_cut.10 -M 100 \
 #   $DATA_ROOT_DIR/temporal/temporal_nobel_prize/test/qrel.txt \
-#   $OUTPUT_DIR/rank.trec
+#   $OUTPUT_DIR/rank.trec > $OUTPUT_DIR/bm25_out.txt
 
-# ========= Time sensitve qa ==========
+# # ========= Time sensitve qa ==========
 DATA_NAME=time_sensitive_qa
 OUTPUT_DIR=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron/$DATA_NAME/bm25
 mkdir -p $OUTPUT_DIR
 
+mamba activate bm25s
+unset LD_LIBRARY_PATH
 python /home/thuy0050/code/tevatron/louis/scripts/baselines/bm25_timesensitiveqa.py
 
+mamba deactivate
+mamba activate tevatron
 # ==== CONVERT TO TREC FORMAT ====  
 python -m tevatron.utils.format.convert_result_to_trec \
     --input $OUTPUT_DIR/rank.txt \
@@ -71,8 +76,8 @@ python -m tevatron.utils.format.convert_result_to_trec \
 # ==== EVALUATE RESULTS USING PYSERINI ====
 # Note that the M here will set the @k (i.e., @M) of mrr and map, by default, if not set, M=100
 python -m pyserini.eval.trec_eval -c \
-  -mP.10 -mrecall.10 -mndcg_cut.10 -M 10 -mrecip_rank -mmap \
-  $DATA_ROOT_DIR/temporal/time_sensitive_qa/test_with_unanswerable/qrel.txt \
+  -m recall.10,100 -m ndcg_cut.10 -M 100 \
+  $DATA_ROOT_DIR/temporal/time_sensitive_qa/test/qrel.txt \
   $OUTPUT_DIR/rank.trec
 
 # # ========= NanoBEIR NQ==========

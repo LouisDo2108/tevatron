@@ -2,6 +2,7 @@
 __pycache__/
 *.egg-info/
 
+dev*
 *log*/
 .eval/
 .train/
@@ -11,6 +12,8 @@ results/
 *.err
 *.out
 temp.py
+*.npy
+*.parquet
 dev/
 
 # Directories

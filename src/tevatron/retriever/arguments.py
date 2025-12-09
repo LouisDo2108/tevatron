@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from typing import List, Optional
-from sentence_transformers.training_args import BatchSamplers, MultiDatasetBatchSamplers
+# from sentence_transformers.training_args import BatchSamplers, MultiDatasetBatchSamplers
 from transformers.training_args import TrainingArguments
 
 
@@ -137,7 +137,7 @@ class DataArguments:
     )
 
     train_group_size: int = field(
-        default=8, metadata={"help": "number of passages used to train for each query"}
+        default=5, metadata={"help": "number of passages used to train for each query"}
     )
 
     positive_passage_no_shuffle: bool = field(
@@ -207,6 +207,7 @@ class DataArguments:
         metadata={"help": "padding side for the tokenizer, can be 'left' or 'right'"}
     )
     eval_dataset_path: str = field(default=None)  # type:ignore
+    num_samples: int = field(default=50_000)
 
 
 @dataclass
@@ -217,7 +218,7 @@ class TevatronTrainingArguments(TrainingArguments):
     grad_cache: bool = field(default=False, metadata={"help": "Use gradient cache update"})
     gc_q_chunk_size: int = field(default=4)
     gc_p_chunk_size: int = field(default=32)
-    dataloader_num_workers: int = field(default=4)
+    dataloader_num_workers: int = field(default=8)
     tf32: bool = field(default=True)
     report_to: str = field(default="none") # wandb
     save_total_limit: int = field(default=1)
@@ -234,13 +235,13 @@ class TevatronTrainingArguments(TrainingArguments):
         },
     )
 
-    # For SentenceBertStyle dataset
-    batch_sampler: BatchSamplers = field(
-        default=BatchSamplers.BATCH_SAMPLER,
-    )
-    multi_dataset_batch_sampler: MultiDatasetBatchSamplers = field(
-        default=MultiDatasetBatchSamplers.PROPORTIONAL,
-    )
+    # # For SentenceBertStyle dataset
+    # batch_sampler: BatchSamplers = field(
+    #     default=BatchSamplers.BATCH_SAMPLER,
+    # )
+    # multi_dataset_batch_sampler: MultiDatasetBatchSamplers = field(
+    #     default=MultiDatasetBatchSamplers.PROPORTIONAL,
+    # )
     modules_to_save: List[str] = field(default_factory=lambda: [])
 
     # madaptor specific
@@ -262,11 +263,18 @@ class TevatronTrainingArguments(TrainingArguments):
     pt: float = field(default=0.0)
     qt_recon: float = field(default=0.0)
     pt_recon: float = field(default=0.0)
+    # torch_empty_cache_steps: int = field(default=10)
 
     # Others to improve the performance
+    detach_temporal: bool = field(default=False)
+    distillation: float = field(default=0.0)
+    use_residual: bool = field(default=False)
+    add_cls: bool = field(default=False)
+    new_cls: bool = field(default=False)
     filter_false_negatives: bool = field(default=False)
     truncated_normalize: bool = field(default=False)
     kl_loss: bool = field(default=False)
+    adaptor_dim: int = field(default=768)
 
     # For evaluation
     eval_on_start: bool = field(default=False)
@@ -274,6 +282,6 @@ class TevatronTrainingArguments(TrainingArguments):
     save_strategy: str = field(default="best")
     load_best_model_at_end: bool = field(default=True)
     prediction_loss_only: bool = field(default=True)
-    per_device_eval_batch_size: int = field(default=512)
+    per_device_eval_batch_size: int = field(default=256)
     metric_for_best_model: str = field(default="eval_recall@1")
     greater_is_better: bool = field(default=True)

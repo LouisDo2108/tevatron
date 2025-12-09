@@ -131,7 +131,14 @@ def main():
 
     set_seed(training_args.seed)
 
-    default_config = AutoConfig.from_pretrained(model_args.model_name_or_path, trust_remote_code=True)
+    try:
+        default_config = AutoConfig.from_pretrained(model_args.model_name_or_path, trust_remote_code=True)
+    except Exception as e:
+        print("Cannot get the model name, use adapter_config.json instead.")
+        import json
+        with open(os.path.join(model_args.model_name_or_path, "adapter_config.json")) as f:
+            temp_config = json.load(f)
+        default_config = AutoConfig.from_pretrained(temp_config["base_model_name_or_path"], trust_remote_code=True)
     tokenizer = AutoTokenizer.from_pretrained(
         (
             model_args.tokenizer_name
@@ -157,6 +164,7 @@ def main():
         eval_data_args = deepcopy(data_args)
         eval_data_args.dataset_path = data_args.eval_dataset_path
         # eval_data_args.dataset_split = "eval"
+        eval_data_args.train_group_size = 2
         eval_dataset = TrainDataset(eval_data_args)
     else:
         training_args.eval_strategy = "no"
@@ -167,7 +175,7 @@ def main():
         model_args,
         training_args,
         cache_dir=model_args.cache_dir,
-        torch_dtype=default_config.torch_dtype,
+        dtype=default_config.dtype,
         attn_implementation=model_args.attn_implementation,
     )
     get_params_info(model)

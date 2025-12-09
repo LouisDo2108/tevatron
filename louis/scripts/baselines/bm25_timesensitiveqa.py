@@ -6,7 +6,6 @@ from pdb import set_trace as st
 encoder = msgspec.json.Encoder()
 decoder = msgspec.json.Decoder()
 
-import pandas as pd
 import bm25s
 import Stemmer  # optional: for stemming
 
@@ -48,7 +47,7 @@ def write_json(file_path, data, jsonl=False):
 
 
 corpus = read_json(
-    "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/time_sensitive_qa/test/corpus.jsonl",
+    "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/time_sensitive_qa/test/corpus_v2.jsonl",
     jsonl=True,
 )
 corpus_records = [{"id": x["docid"], "title": "", "text": x["text"]} for x in corpus]
@@ -76,7 +75,7 @@ print(f"Peak memory usage: {mem_use:.2f} GB")
 
 
 queries = read_json(
-    "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/time_sensitive_qa/test_with_unanswerable/query.jsonl",
+    "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/time_sensitive_qa/test/query.jsonl",
     jsonl=True,
 )
 

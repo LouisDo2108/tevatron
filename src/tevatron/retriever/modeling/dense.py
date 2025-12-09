@@ -11,11 +11,14 @@ from pdb import set_trace as st
 
 class DenseModel(EncoderModel):
 
-    def encode_query(self, qry):
+    def encode_query(self, qry, pooling=True):
         if self.encoder.name_or_path != "jinaai/jina-embeddings-v3":
             query_hidden_states = self.encoder(**qry, return_dict=True)
             query_hidden_states = query_hidden_states.last_hidden_state
-            return self._pooling(query_hidden_states, qry["attention_mask"])
+            if pooling:            
+                return self._pooling(query_hidden_states, qry["attention_mask"])
+            else:
+                return query_hidden_states
         else:
             task = 'retrieval.query'
             task_id = self.encoder._adaptation_map[task]
@@ -24,7 +27,10 @@ class DenseModel(EncoderModel):
                 **qry, return_dict=True, adapter_mask=adapter_mask,
             )
             query_hidden_states = query_hidden_states.last_hidden_state
-            return self._pooling(query_hidden_states, qry["attention_mask"])
+            if pooling:            
+                return self._pooling(query_hidden_states, qry["attention_mask"])
+            else:
+                return query_hidden_states
 
     def encode_passage(self, psg):
         # encode passage is the same as encode query
@@ -55,7 +61,7 @@ class DenseModel(EncoderModel):
         else:
             raise ValueError(f'unknown pooling method: {self.pooling}')
 
-        if self.encoder.eval() and self.matryoshka_dim is not None:
+        if not self.encoder.training and self.matryoshka_dim is not None:
             print(f"Eval with matryoshka dim {self.matryoshka_dim}")
             reps = reps[:, :self.matryoshka_dim]
 

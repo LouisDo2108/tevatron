@@ -16,24 +16,6 @@ import torch
 import torch.distributed as dist
 import torch.nn.functional as F
 from datasets import Dataset, DatasetDict, IterableDataset, IterableDatasetDict, Value
-from sentence_transformers.sampler import (
-    DefaultBatchSampler,
-    GroupByLabelBatchSampler,
-    MultiDatasetDefaultBatchSampler,
-    NoDuplicatesBatchSampler,
-    ProportionalBatchSampler,
-    RoundRobinBatchSampler,
-)
-from sentence_transformers.training_args import (
-    BatchSamplers,
-    MultiDatasetBatchSamplers,
-    SentenceTransformerTrainingArguments,
-)
-from sentence_transformers.util import (
-    disable_logging,
-    is_datasets_available,
-    is_training_available,
-)
 from torch.utils.data import BatchSampler, ConcatDataset, DataLoader, RandomSampler
 from transformers.trainer import TRAINING_ARGS_NAME, Trainer
 from transformers.trainer_pt_utils import EvalLoopContainer, find_batch_size
@@ -175,7 +157,7 @@ class MAdaptorTrainer(TevatronTrainer):
         pos_scores = scores[torch.arange(scores.size(0)), target]
         neg_mask = torch.ones_like(scores, dtype=torch.bool)
         neg_mask[torch.arange(scores.size(0)), target] = False
-        neg_scores = scores[neg_mask].view(scores.size(0), -1)
+        neg_scores = scores[neg_mask].view(scores.size(0), -1).mean(dim=-1)
 
         return pos_scores, neg_scores
 

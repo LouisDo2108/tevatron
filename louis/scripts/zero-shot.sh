@@ -33,7 +33,32 @@ export PYTORCH_CUDA_ALLOC_CONF=garbage_collection_threshold:0.6
 # Useful for pytorch debugging: torch.autograd.set_detect_anomaly(True)
 
 cd /home/thuy0050/code/tevatron
+# time_sensitive_qa temporal_nobel_prize
+
+# python louis/scripts/zero-shot.py \
+#     --model bge \
+#     --data time_sensitive_qa 
+
+# python louis/scripts/zero-shot.py \
+#     --model bgem3 \
+#     --data time_sensitive_qa 
 
 python louis/scripts/zero-shot.py \
-    --model bge \
-    --data temporal_nobel_prize # time_sensitive_qa
+    --model gte \
+    --data temporal_nobel_prize 
+
+# python louis/scripts/zero-shot.py \
+#     --model contriever \
+#     --data time_sensitive_qa 
+
+# python louis/scripts/zero-shot.py \
+#     --model nomic \
+#     --data time_sensitive_qa 
+
+# python louis/scripts/zero-shot.py \
+#     --model qwen3 \
+#     --data time_sensitive_qa 
+
+# python louis/scripts/zero-shot.py \
+#     --model gte1.5 \
+#     --data time_sensitive_qa 

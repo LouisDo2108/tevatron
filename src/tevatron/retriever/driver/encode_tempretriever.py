@@ -34,10 +34,13 @@ def init_sutime():
     sutime_instance = SUTime(mark_time_ranges=True, include_range=True)
     return sutime_instance
 
-# import torch.multiprocessing as mp
-# mp.set_start_method('spawn', force=True)
-
 logger = logging.getLogger(__name__)
+
+import torch.multiprocessing as mp
+try:
+    mp.set_start_method('fork', force=True) # spawn
+except Exception as e:
+    logger.info("forked")
 
 
 @dataclass
@@ -140,7 +143,7 @@ class EncodeDataset(Dataset):
             content_audio = None
 
         content_temporal = sutime_instance.parse(content_text)
-        content_temporal = " ".join([t["text"] for t in content_temporal])
+        content_temporal = ", ".join([t["text"] for t in content_temporal])
 
         return content_id, content_text, content_temporal
 
