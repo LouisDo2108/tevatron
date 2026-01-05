@@ -3,14 +3,13 @@ import os
 import pickle
 import sys
 from contextlib import nullcontext
-from typing import Dict
 
 import random
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from transformers import AutoTokenizer, HfArgumentParser
+from transformers import AutoConfig, AutoTokenizer, HfArgumentParser
 from transformers.utils.import_utils import is_torch_available
 
 from tevatron.retriever.arguments import DataArguments, ModelArguments
@@ -115,6 +114,7 @@ class MAdaptor(DenseModel):
             print("There is no adaptor state dict")
 
         return model
+
 
 def get_params_info(model):
     all_param = 0
@@ -235,7 +235,7 @@ def main():
 
     encoded = []
     lookup_indices = []
-    model = model.to(training_args.device)
+    model.to(training_args.device)
     model.eval()
 
     print(

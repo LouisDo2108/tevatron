@@ -97,7 +97,7 @@ class DataArguments:
     )
 
     dataset_cache_dir: Optional[str] = field(
-        default="/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/tevatron",
+        default=None,# "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/tevatron",
         metadata={
             "help": "Where do you want to store the data downloaded from huggingface"
         },
@@ -255,6 +255,10 @@ class TevatronTrainingArguments(TrainingArguments):
     matryoshka_dim_list: List[int] = field(default_factory=lambda:[768])
 
     # This will enable the loss for the temporal embedding subspace.
+    enhanced_temporal: bool = field(
+        default=False,
+        metadata={"help": "Whether to use our augmented data"}
+    )
     temporal: bool = field(default=False)  
     temporal_reconstruction: bool = field(default=False)
     temporal_dim: int = field(default=64)
@@ -268,6 +272,8 @@ class TevatronTrainingArguments(TrainingArguments):
     # Others to improve the performance
     detach_temporal: bool = field(default=False)
     distillation: float = field(default=0.0)
+    cka_reg: float = field(default=0.0)
+    l2_reg: float = field(default=0.0)
     use_residual: bool = field(default=False)
     add_cls: bool = field(default=False)
     new_cls: bool = field(default=False)

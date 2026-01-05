@@ -164,8 +164,6 @@ def main():
                 else:
                     model_output: EncoderOutput = model(passage=batch)
                     encoded.append(model_output.p_reps.cpu().detach().numpy())
-        
-        # break
 
     encoded = np.concatenate(encoded).astype(np.float16)
 

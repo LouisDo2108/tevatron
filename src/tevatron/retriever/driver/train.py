@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 encoder = msgspec.json.Encoder()
 decoder = msgspec.json.Decoder()
 
+# torch.autograd.set_detect_anomaly(True)
 
 def set_seed(seed: int, deterministic: bool = True):
     # Copy from transformers.trainer_utilss.set_seed with some modifications

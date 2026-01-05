@@ -84,6 +84,9 @@ class EncoderModel(nn.Module):
             scores = self.compute_similarity(q_reps, p_reps)
             scores = scores.view(q_reps.size(0), -1)
 
+            if torch.any(torch.isnan(scores)):
+                raise ValueError("Nan in loss")
+
             target = torch.arange(scores.size(0), device=scores.device, dtype=torch.long)
             target = target * (p_reps.size(0) // q_reps.size(0))
 

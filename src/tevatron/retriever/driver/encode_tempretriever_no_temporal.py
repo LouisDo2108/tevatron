@@ -7,7 +7,6 @@ from torch import Tensor
 from contextlib import nullcontext
 from datasets import load_dataset, load_from_disk
 from pdb import set_trace as st
-from time import perf_counter
 
 from transformers import PreTrainedTokenizer
 from dataclasses import dataclass
@@ -29,22 +28,22 @@ from tevatron.retriever.modeling import DenseModel
 from transformers.file_utils import ModelOutput
 from tevatron.louis.src.models import TempRetriever
 
-from sutime import SUTime
+# from sutime import SUTime
 
 # sutime_instance = SUTime(mark_time_ranges=True, include_range=True)
 
-def init_sutime():
-    global sutime_instance
-    sutime_instance = SUTime(mark_time_ranges=True, include_range=True)
-    return sutime_instance
+# def init_sutime():
+#     global sutime_instance
+#     sutime_instance = SUTime(mark_time_ranges=True, include_range=True)
+#     return sutime_instance
 
 logger = logging.getLogger(__name__)
 
-import torch.multiprocessing as mp
-try:
-    mp.set_start_method('fork', force=True)
-except Exception as e:
-    logger.info("forked")
+# import torch.multiprocessing as mp
+# try:
+#     mp.set_start_method('fork', force=True)
+# except Exception as e:
+#     logger.info("forked")
 
 
 # @dataclass
@@ -146,10 +145,10 @@ class EncodeDataset(Dataset):
         if not self.data_args.encode_audio:
             content_audio = None
 
-        content_temporal = sutime_instance.parse(content_text)
-        content_temporal = ", ".join([t["text"] for t in content_temporal])
+        # content_temporal = sutime_instance.parse(content_text)
+        # content_temporal = ", ".join([t["text"] for t in content_temporal])
 
-        return content_id, content_text, content_temporal
+        return content_id, content_text #, content_temporal
 
 
 @dataclass
@@ -169,7 +168,7 @@ class EncodeCollator:
         """
         content_ids = [x[0] for x in features]
         texts = [x[1] for x in features]
-        temporal = [x[2] for x in features]
+        # temporal = [x[2] for x in features]
 
         max_length = (
             self.data_args.query_max_len
@@ -190,21 +189,21 @@ class EncodeCollator:
             add_special_tokens=True,
             padding_side=self.data_args.padding_side,
         )
-        collated_temporal_inputs = self.tokenizer(
-            temporal,
-            padding=True,
-            truncation=True,
-            max_length=(
-                max_length - 1 if self.data_args.append_eos_token else max_length
-            ),
-            pad_to_multiple_of=self.data_args.pad_to_multiple_of,
-            return_tensors="pt",
-            return_attention_mask=True,
-            return_token_type_ids=False,
-            add_special_tokens=True,
-            padding_side=self.data_args.padding_side,
-        )
-        return content_ids, collated_inputs, collated_temporal_inputs
+        # collated_temporal_inputs = self.tokenizer(
+        #     temporal,
+        #     padding=True,
+        #     truncation=True,
+        #     max_length=(
+        #         max_length - 1 if self.data_args.append_eos_token else max_length
+        #     ),
+        #     pad_to_multiple_of=self.data_args.pad_to_multiple_of,
+        #     return_tensors="pt",
+        #     return_attention_mask=True,
+        #     return_token_type_ids=False,
+        #     add_special_tokens=True,
+        #     padding_side=self.data_args.padding_side,
+        # )
+        return content_ids, collated_inputs #, collated_temporal_inputs
 
 
 # class TempRetriever(DenseModel):
@@ -358,55 +357,45 @@ def main():
         shuffle=False,
         drop_last=False,
         num_workers=training_args.dataloader_num_workers,
-        worker_init_fn=lambda _: init_sutime(),
+        # worker_init_fn=lambda _: init_sutime(),
     )
-    
+
+    encoded = []
+    lookup_indices = []
     model.to(training_args.device)
     model.eval()
     model.base_model.eval()
 
-    time_results = []
-
-    for _ in range(1):
-        encoded = []
-        lookup_indices = []
-
-        print(
-            f"Using {type(model)} from this pretrained path {model_args.model_name_or_path}."
-        )
-        
-        start = perf_counter()
-        
-        for (batch_ids, batch, batch_temporal) in tqdm(encode_loader):
-            lookup_indices.extend(batch_ids)
-            with (
-                torch.autocast(
-                    "cuda", dtype=torch.float16 if training_args.fp16 else torch.bfloat16
-                )
-                if training_args.fp16 or training_args.bf16
-                else nullcontext()
-            ):
-                with torch.no_grad():
-                    for k, v in batch.items():
-                        batch[k] = batch[k].to(training_args.device)
-                        batch_temporal[k] = batch_temporal[k].to(training_args.device)
-                    if data_args.encode_is_query:
-                        model_output = model(query=batch, qt=batch_temporal)
-                        q_reps = model_output.q_reps.cpu().detach().numpy()
-                        qt_reps = model_output.qt_reps.cpu().detach().numpy()
-                        # vectors = np.concatenate([q_reps, qt_reps], axis=1)
-                        vectors = q_reps * qt_reps
-                        encoded.append(vectors)
-                    else:
-                        model_output = model(passage=batch, pt=batch_temporal)
-                        p_reps = model_output.p_reps.cpu().detach().numpy()
-                        pt_reps = model_output.pt_reps.cpu().detach().numpy()
-                        # vectors = np.concatenate([p_reps, pt_reps], axis=1)
-                        vectors = p_reps * pt_reps
-                        encoded.append(vectors)
-        end = perf_counter()
-        time_results.append(end-start)
-    print(np.array(time_results).mean())
+    print(
+        f"Using {type(model)} from this pretrained path {model_args.model_name_or_path}."
+    )
+    for (batch_ids, batch) in tqdm(encode_loader):
+        lookup_indices.extend(batch_ids)
+        with (
+            torch.autocast(
+                "cuda", dtype=torch.float16 if training_args.fp16 else torch.bfloat16
+            )
+            if training_args.fp16 or training_args.bf16
+            else nullcontext()
+        ):
+            with torch.no_grad():
+                for k, v in batch.items():
+                    batch[k] = batch[k].to(training_args.device)
+                    # batch_temporal[k] = batch_temporal[k].to(training_args.device)
+                if data_args.encode_is_query:
+                    model_output = model(query=batch, qt=None)
+                    q_reps = model_output.q_reps.cpu().detach().numpy()
+                    # qt_reps = model_output.qt_reps.cpu().detach().numpy()
+                    # vectors = np.concatenate([q_reps, qt_reps], axis=1)
+                    # vectors = q_reps * qt_reps
+                    encoded.append(q_reps)
+                else:
+                    model_output = model(passage=batch, pt=None)
+                    p_reps = model_output.p_reps.cpu().detach().numpy()
+                    # pt_reps = model_output.pt_reps.cpu().detach().numpy()
+                    # vectors = np.concatenate([p_reps, pt_reps], axis=1)
+                    # vectors = p_reps * pt_reps
+                    encoded.append(p_reps)
 
     encoded = np.concatenate(encoded).astype(np.float16)
 
