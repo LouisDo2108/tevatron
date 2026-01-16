@@ -14,6 +14,12 @@ def main():
         type=str,
         help="Model name, e.g. bge | bgem3 | contriever | gte | nomic | qwen3",
     )
+    parser.add_argument(
+        "--method_name",
+        default="temporal",
+        type=str,
+        help="Method name, e.g. temporal, madaptor, tempretriever, ts-retriever",
+    )
     parser.add_argument("--exp_name", default="dev", type=str)
     parser.add_argument(
         "--data",
@@ -37,16 +43,15 @@ def main():
     OUTPUT_ROOT = HOME / "mg61_scratch2" / "thuy0050" / "exp" / "tevatron"
     DATA_NAME = args.data
     EXP_NAME = args.exp_name
-    # MODEL_NAME = "ts-retriever"
-    MODEL_NAME = "temporal"
+    METHOD_NAME = args.method_name
 
     # ==== MODEL CONFIGS ====
     # If you want to run all models in `configs`, loop below.
     # Otherwise, you could also just do `cfg = configs[args.model]`.
     # for model_key, cfg in configs.items():
     cfg = configs[args.model]
-    backbone = cfg["checkpoint"]
-    output_dir = OUTPUT_ROOT / DATA_NAME / MODEL_NAME / backbone / EXP_NAME
+    backbone = str(cfg["checkpoint"])
+    output_dir = OUTPUT_ROOT / DATA_NAME / METHOD_NAME / backbone / EXP_NAME
     output_dir.mkdir(parents=True, exist_ok=True)
     
     batch_size = args.batch_size
@@ -54,11 +59,21 @@ def main():
     lora_eval = ""
     if args.lora:
         lora_eval = f"--lora_name_or_path {output_dir}"
+    
+    encode_file_name = "encode.py"
+    adaptor_dim = ""
+
+    if METHOD_NAME == "madaptor":
+        adaptor_dim = f"--adaptor_dim {cfg['adaptor_dim']}"
+        encode_file_name = "encode_madaptor.py"
+    elif METHOD_NAME == "tempretriever":
+        encode_file_name = "encode_tempretriever_no_temporal.py"
+    else:
+        encode_file_name = "encode.py"
 
     encode_query_cmd = f"""
-    python {CODE_DIR}/src/tevatron/retriever/driver/encode.py \
+    python {CODE_DIR}/src/tevatron/retriever/driver/{encode_file_name} \
         --per_device_eval_batch_size {batch_size} \
-        --query_max_len 512 \
         --pooling {cfg['pooling']} \
         --bf16 \
         --normalize \
@@ -69,13 +84,12 @@ def main():
         --encode_output_path {output_dir}/queries_emb_beir_nq.pkl \
         --model_name_or_path {output_dir} \
         {lora_eval} \
-        --overwrite_output_dir \
         --query_prefix {cfg['query_prefix']} \
         --passage_prefix {cfg['passage_prefix']} \
         --padding_side {cfg['padding_side']} \
         --matryoshka_dim {cfg['matryoshka_dim']} \
-        --dataloader_num_workers 8 \
-      """
+        {adaptor_dim}
+    """
 
     retrieval_cmd = f"""
     set -f && OMP_NUM_THREADS=16 python -m tevatron.retriever.driver.search \

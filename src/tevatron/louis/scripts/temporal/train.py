@@ -14,6 +14,12 @@ def main():
         type=str,
         help="Model name, e.g. bge | bgem3 | contriever | gte | nomic | qwen3",
     )
+    parser.add_argument(
+        "--method_name",
+        default="temporal",
+        type=str,
+        help="Method name, e.g. temporal, madaptor, tempretriever, ts-retriever, zero-shot",
+    )
     parser.add_argument("--exp_name", default="dev", type=str)
     parser.add_argument(
         "--data",
@@ -74,23 +80,10 @@ def main():
     CODE_DIR = HOME / "code" / "tevatron" / "src" / "tevatron"
     DATA_ROOT = HOME / "mg61_scratch2" / "thuy0050" / "data" / "third_work"
     OUTPUT_ROOT = HOME / "mg61_scratch2" / "thuy0050" / "exp" / "tevatron"
-    MODEL_NAME = "temporal"
+    METHOD_NAME = args.method_name
 
     data_name = args.data
     exp_name = args.exp_name
-    
-    dataset_path = ""
-    if data_name == "temporal_nobel_prize":
-        if args.enhanced_temporal:
-            dataset_path = f"{DATA_ROOT}/temporal/{data_name}/train/train_enhanced_temporal_v2.jsonl"
-        else:
-            dataset_path = f"{DATA_ROOT}/temporal/{data_name}/train/train.jsonl"
-    elif data_name == "time_sensitive_qa":
-        if args.enhanced_temporal:
-            dataset_path = f"{DATA_ROOT}/temporal/time_sensitive_qa/development/train.jsonl"
-        else:
-            dataset_path = f"{DATA_ROOT}/temporal/{data_name}/train/train.jsonl"
-
 
     # ==== ARGUMENTS ====
     batch_size = args.batch_size
@@ -108,7 +101,7 @@ def main():
     cfg = configs[model_name]
 
     backbone = cfg["checkpoint"]
-    output_dir = OUTPUT_ROOT / data_name / MODEL_NAME / backbone / exp_name
+    output_dir = OUTPUT_ROOT / data_name / METHOD_NAME / backbone / exp_name
     output_dir.mkdir(parents=True, exist_ok=True)
 
     lora_train = ""
@@ -116,13 +109,41 @@ def main():
     if args.lora:
         lora_train = f"--lora --lora_r {args.lora_r} --lora_alpha {args.lora_alpha} --lora_target_modules all-linear"
         lora_eval = f"--lora_name_or_path {output_dir}"
+        
+    encode_file_name = "encode.py"
+    train_file_name = "train.py"
+    adaptor_dim = ""
+
+    if METHOD_NAME == "madaptor":
+        adaptor_dim = f"--adaptor_dim {cfg['adaptor_dim']}"
+        encode_file_name = "encode_madaptor.py"
+        # train_file_name = "train_madaptor.py"
+    elif METHOD_NAME == "tempretriever":
+        encode_file_name = "encode_tempretriever_no_temporal.py"
+        # train_file_name = "train_tempretriever.py"
+        num_neg = 4
+        batch_size = 32
+        args.lr = 1e-5
+        lora_train = ""
+        lora_eval = ""
+    elif METHOD_NAME == "ts-retriever":
+        num_neg = 1
+        batch_size = 64
+        lora_train = ""
+        lora_eval = ""
+    else:
+        encode_file_name = "encode.py"
+        train_file_name = "train.py"
 
     filter_false_negatives = ""
     if args.filter_false_negatives:
         filter_false_negatives = "--filter_false_negatives"
+
     temporal = ""
     if args.temporal:
         temporal = "--temporal"
+    
+    # No longer used
     temporal_reconstruction = ""
     if args.temporal_reconstruction:
         temporal_reconstruction = "--temporal_reconstruction"
@@ -139,19 +160,33 @@ def main():
     else:
         matryoshka_dim = str(cfg["matryoshka_dim"])
         
+    dataset_path = ""
+    if data_name == "temporal_nobel_prize":
+        if args.enhanced_temporal:
+            dataset_path = f"{DATA_ROOT}/temporal/temporal_nobel_prize/train/train.jsonl"
+        else:
+            if METHOD_NAME == "tempretriever":
+                dataset_path = f"{DATA_ROOT}/temporal/temporal_nobel_prize/train/tempretriever/tempretriever_trainset_with_sutime_extracted_temporal.jsonl"
+            else:
+                dataset_path = f"{DATA_ROOT}/temporal/temporal_nobel_prize/train/original/train.jsonl"
+    elif data_name == "time_sensitive_qa":
+        if args.enhanced_temporal:
+            dataset_path = f"{DATA_ROOT}/temporal/time_sensitive_qa/train/train.jsonl"
+        else:
+            if METHOD_NAME == "tempretriever":
+                raise ValueError("Currently, there is no TimeQA dataset with SUTIME extracted temporal information for Tempretriever training.")
+            else:
+                dataset_path = f"{DATA_ROOT}/temporal/time_sensitive_qa/train/original/train.jsonl"
+        
     eval_dataset_path = ""
     if args.eval:
         if data_name == "temporal_nobel_prize":
             if args.enhanced_temporal:
-                eval_dataset_path = f"--eval_dataset_path {DATA_ROOT}/temporal/temporal_nobel_prize/train/dev3.jsonl --eval_on_start True --metric_for_best_model eval_recall@1_{matryoshka_dim}"
+                eval_dataset_path = f"--eval_dataset_path {DATA_ROOT}/temporal/temporal_nobel_prize/train/original/dev.jsonl --eval_on_start True --metric_for_best_model eval_recall@1_{matryoshka_dim}"
             else:
                 eval_dataset_path = f"--eval_dataset_path {DATA_ROOT}/temporal/temporal_nobel_prize/train/dev.jsonl --eval_on_start True --metric_for_best_model eval_recall@1_{matryoshka_dim}"
-            # eval_dataset_path = f"--eval_dataset_path {DATA_ROOT}/temporal/temporal_nobel_prize/train/dev.jsonl"
         else:
-            # if args.enhanced_temporal:
-            #     eval_dataset_path = f"--eval_dataset_path {DATA_ROOT}/temporal/time_sensitive_qa/development/dev.jsonl --eval_on_start True --metric_for_best_model eval_recall@1_{matryoshka_dim}"
-            # else:
-            eval_dataset_path = f"--eval_dataset_path {DATA_ROOT}/temporal/time_sensitive_qa/train/dev.jsonl --eval_on_start True --metric_for_best_model eval_recall@1_{matryoshka_dim}"
+            eval_dataset_path = f"--eval_dataset_path {DATA_ROOT}/temporal/time_sensitive_qa/train/original/dev.jsonl --eval_on_start True --metric_for_best_model eval_recall@1_{matryoshka_dim}"
     else:
         eval_dataset_path = "--save_strategy epoch --load_best_model_at_end False"
 
@@ -174,7 +209,7 @@ def main():
     # ==== COMMANDS ====
     train_cmd = f"""
     ulimit -n 8192 && \
-    python {CODE_DIR}/louis/src/train_temporal.py \
+    python {CODE_DIR}/louis/src/{train_file_name} \
         --do_train \
         --pooling {cfg['pooling']} \
         --bf16 \
@@ -184,8 +219,6 @@ def main():
         --per_device_eval_batch_size {eval_batch_size} \
         --learning_rate {args.lr} \
         --temperature {cfg['temperature']} \
-        --logging_steps 10 \
-        --dataloader_num_workers 8 \
         --num_train_epochs {epoch} \
         --gradient_accumulation_steps {grad_accum} \
         {lora_train} \
@@ -217,13 +250,13 @@ def main():
         {new_cls} \
         {use_residual} \
         --matryoshka_dim_list {matryoshka_dim_list_str} \
+        {adaptor_dim}
         > {output_dir}/train_log.txt
     """
 
     encode_corpus_cmd = f"""
-    python {CODE_DIR}/retriever/driver/encode.py \
+    python {CODE_DIR}/retriever/driver/{encode_file_name} \
         --per_device_eval_batch_size {eval_batch_size} \
-        --passage_max_len 512 \
         --pooling {cfg['pooling']} \
         --bf16 \
         --normalize \
@@ -233,19 +266,15 @@ def main():
         --encode_output_path {output_dir}/corpus_emb_{matryoshka_dim}.pkl \
         --model_name_or_path {output_dir} \
         {lora_eval} \
-        --overwrite_output_dir \
-        --dataloader_num_workers 8 \
         --query_prefix {cfg['query_prefix']} \
         --passage_prefix {cfg['passage_prefix']} \
         --padding_side {cfg['padding_side']} \
-        --matryoshka_dim {matryoshka_dim}
+        --matryoshka_dim {matryoshka_dim} \
+        {adaptor_dim}
     """
-    # {DATA_ROOT}/tevatron/Tevatron___msmarco-passage \
-    
     encode_query_cmd = f"""
-    python {CODE_DIR}/retriever/driver/encode.py \
+    python {CODE_DIR}/retriever/driver/{encode_file_name} \
         --per_device_eval_batch_size {eval_batch_size} \
-        --query_max_len 512 \
         --pooling {cfg['pooling']} \
         --bf16 \
         --normalize \
@@ -256,12 +285,11 @@ def main():
         --model_name_or_path {output_dir} \
         {lora_eval} \
         --encode_output_path {output_dir}/queries_emb_{matryoshka_dim}.pkl \
-        --overwrite_output_dir \
-        --dataloader_num_workers 8 \
         --query_prefix {cfg['query_prefix']} \
         --passage_prefix {cfg['passage_prefix']} \
         --padding_side {cfg['padding_side']} \
-        --matryoshka_dim {matryoshka_dim}
+        --matryoshka_dim {matryoshka_dim} \
+        {adaptor_dim}
     """
 
     retrieval_cmd = f"""
@@ -283,15 +311,6 @@ def main():
         {DATA_ROOT}/temporal/{data_name}/test/qrel.txt \
         {output_dir}/rank.trec > {output_dir}/out_{matryoshka_dim}.txt
     """
-    # && python {CODE_DIR}/louis/beir_scripts/eval_nanobeir_with_sbert.py \
-    #     --model_name_or_path {output_dir} \
-    #     --nanobeir_datasets NQ \
-    #     --pooling {cfg['pooling']} \
-    #     --bf16 \
-    #     --query_prompts {cfg['query_prefix']} \
-    #     --corpus_prompts {cfg['passage_prefix']} \
-    #     --matryoshka_dim {matryoshka_dim} > {output_dir}/out_nanobeir_nq_{matryoshka_dim}.txt
-
     # ==== EXECUTION ====
     run([train_cmd])
     run([encode_corpus_cmd, encode_query_cmd])

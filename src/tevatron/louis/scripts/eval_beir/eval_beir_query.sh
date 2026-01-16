@@ -17,8 +17,8 @@
 
 #SBATCH --account=mg61
 #SBATCH --job-name=thuy0050
-#SBATCH --output=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron/logs/slurm-%x-%j.out
-#SBATCH --error=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron/logs/slurm-%x-%j.err
+#SBATCH --output=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron/logs/eval_beir/slurm-%x-%j.out
+#SBATCH --error=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron/logs/eval_beir/slurm-%x-%j.err
 #SBATCH --time=1-00:00:00
 
 #SBATCH --nodes=1
@@ -34,8 +34,6 @@
 source ~/.bashrc
 mamba activate tevatron
 
-# ulimit -n 4096
-
 export CUDA_VISIBLE_DEVICES=0
 # export PYTORCH_ALLOC_CONF=max_split_size_mb:512
 export PYTORCH_ALLOC_CONF=expandable_segments:True
@@ -46,18 +44,18 @@ export PYTORCH_ALLOC_CONF=garbage_collection_threshold:0.6
 
 # Useful for pytorch debugging: torch.autograd.set_detect_anomaly(True)
 
-cd /home/thuy0050/code/tevatron/src/tevatron/
+cd /home/thuy0050/code/tevatron/src/tevatron
 
 MODEL=$1
 DATA=$2
 EXP_NAME=$3
 BATCH_SIZE=$4
 LORA=$5
+METHOD_NAME=$6
 
-# echo $MODEL $DATA $EXP_NAME $BATCH_SIZE
-# echo "lora $LORA"
 python louis/scripts/eval_beir/eval_beir_query.py \
   --model $MODEL \
+  --method_name $METHOD_NAME \
   --data $DATA \
   --exp_name $EXP_NAME \
   --batch_size $BATCH_SIZE \

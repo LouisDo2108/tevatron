@@ -17,8 +17,8 @@
 
 #SBATCH --account=mg61
 #SBATCH --job-name=thuy0050
-#SBATCH --output=/home/thuy0050/code/tevatron/louis/logs/slurm-%x-%j.out
-#SBATCH --error=/home/thuy0050/code/tevatron/louis/logs/slurm-%x-%j.err
+#SBATCH --output=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron/logs/zero-shot/slurm-%x-%j.out
+#SBATCH --error=/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron/logs/zero-shot/slurm-%x-%j.err
 #SBATCH --time=1-00:00:00
 
 #SBATCH --nodes=1
@@ -44,26 +44,29 @@ export PYTORCH_ALLOC_CONF=garbage_collection_threshold:0.6
 
 # Useful for pytorch debugging: torch.autograd.set_detect_anomaly(True)
 
-cd /home/thuy0050/code/tevatron/src/tevatron
+cd /home/thuy0050/code/tevatron/src/tevatron/louis/scripts/baselines
+# time_sensitive_qa temporal_nobel_prize
 
-MODEL=$1
-DATA=$2
-EXP_NAME=$3
-BATCH_SIZE=$4
-ENHANCED_TEMPORAL=$5
-GRADIENT_CHECKPOINTING=$6
+python zero-shot.py \
+    --model contriever \
+    --data time_sensitive_qa 
 
-python louis/scripts/madaptor/train.py \
-    --model $MODEL \
-    --data $DATA \
-    --exp_name $EXP_NAME \
-    --eval \
-    --batch_size $BATCH_SIZE \
-    $ENHANCED_TEMPORAL \
-    $GRADIENT_CHECKPOINTING
+python zero-shot.py \
+    --model bge \
+    --data time_sensitive_qa 
 
-python louis/scripts/madaptor/eval.py \
-    --model $MODEL \
-    --data $DATA \
-    --exp_name $EXP_NAME \
-    
+python zero-shot.py \
+    --model gte \
+    --data time_sensitive_qa 
+
+python zero-shot.py \
+    --model nomic \
+    --data time_sensitive_qa 
+
+python zero-shot.py \
+    --model gte1.5 \
+    --data time_sensitive_qa 
+
+python zero-shot.py \
+    --model bgem3 \
+    --data time_sensitive_qa 

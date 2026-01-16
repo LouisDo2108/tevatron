@@ -24,7 +24,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=24
+#SBATCH --cpus-per-task=16
 #SBATCH --mem=256G
 #SBATCH --array=0-7%4
 
@@ -34,8 +34,6 @@
 # ==== ENVIRONMENT SETUP ====
 source ~/.bashrc
 mamba activate tevatron
-
-# ulimit -n 4096
 
 export CUDA_VISIBLE_DEVICES=0
 # export PYTORCH_ALLOC_CONF=max_split_size_mb:512
@@ -54,9 +52,11 @@ DATA=$2
 EXP_NAME=$3
 BATCH_SIZE=$4
 LORA=$5
+METHOD_NAME=$6
 
 python louis/scripts/eval_beir/eval_beir_corpus.py \
   --model $MODEL \
+  --method_name $METHOD_NAME \
   --data $DATA \
   --exp_name $EXP_NAME \
   --batch_size $BATCH_SIZE \

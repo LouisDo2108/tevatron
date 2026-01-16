@@ -1,72 +1,44 @@
-MODEL="contriever"
-DATA="temporal_nobel_prize"
-EXP_NAME="matryoshka_original_dataset"
-BATCH_SIZE="2048"
+cd /home/thuy0050/code/tevatron/src/tevatron/louis/scripts/eval_beir
+DATA="temporal_nobel_prize" # time_sensitive_qa
+EXP_NAME="matryoshka_baseline"
 LORA="--lora"
+METHOD_NAME="temporal" # ts-retriever, tempretriever, zero-shot
 
-jid1=$(sbatch --parsable /home/thuy0050/code/tevatron/src/tevatron/louis/scripts/eval_beir/eval_beir_corpus.sh $MODEL $DATA $EXP_NAME $BATCH_SIZE $LORA)
+MODEL="contriever"
+BATCH_SIZE="2048"
 
-sbatch --dependency=afterok:$jid1 /home/thuy0050/code/tevatron/src/tevatron/louis/scripts/eval_beir/eval_beir_query.sh $MODEL $DATA $EXP_NAME $BATCH_SIZE $LORA
-
-# MODEL="contriever"
-# DATA="time_sensitive_qa"
-# EXP_NAME="matryoshka_baseline"
-# BATCH_SIZE="2048"
-# LORA="--lora"
-
-# jid1=$(sbatch --parsable /home/thuy0050/code/tevatron/src/tevatron/louis/scripts/eval_beir/eval_beir_corpus.sh $MODEL $DATA $EXP_NAME $BATCH_SIZE $LORA)
-
-# sbatch --dependency=afterok:$jid1 /home/thuy0050/code/tevatron/src/tevatron/louis/scripts/eval_beir/eval_beir_query.sh $MODEL $DATA $EXP_NAME $BATCH_SIZE $LORA
+jid1=$(sbatch --parsable eval_beir_corpus.sh $MODEL $DATA $EXP_NAME $BATCH_SIZE $LORA $METHOD_NAME)
+sbatch --dependency=afterok:$jid1 eval_beir_query.sh $MODEL $DATA $EXP_NAME $BATCH_SIZE $LORA $METHOD_NAME
 
 # MODEL="bge"
-# DATA="time_sensitive_qa"
-# EXP_NAME="matryoshka_baseline"
 # BATCH_SIZE="2048"
-# LORA="--lora"
 
-# jid2=$(sbatch --parsable /home/thuy0050/code/tevatron/src/tevatron/louis/scripts/eval_beir/eval_beir_corpus.sh $MODEL $DATA $EXP_NAME $BATCH_SIZE $LORA)
-
-# sbatch --dependency=afterok:$jid2 /home/thuy0050/code/tevatron/src/tevatron/louis/scripts/eval_beir/eval_beir_query.sh $MODEL $DATA $EXP_NAME $BATCH_SIZE $LORA
+# jid2=$(sbatch --parsable eval_beir_corpus.sh $MODEL $DATA $EXP_NAME $BATCH_SIZE $LORA $METHOD_NAME)
+# sbatch --dependency=afterok:$jid2 eval_beir_query.sh $MODEL $DATA $EXP_NAME $BATCH_SIZE $LORA $METHOD_NAME
 
 
 # MODEL="bgem3"
-# DATA="time_sensitive_qa"
-# EXP_NAME="matryoshka_baseline"
 # BATCH_SIZE="2048"
-# LORA="--lora"
 
-# jid3=$(sbatch --parsable /home/thuy0050/code/tevatron/src/tevatron/louis/scripts/eval_beir/eval_beir_corpus.sh $MODEL $DATA $EXP_NAME $BATCH_SIZE $LORA)
-
-# sbatch --dependency=afterok:$jid3 /home/thuy0050/code/tevatron/src/tevatron/louis/scripts/eval_beir/eval_beir_query.sh $MODEL $DATA $EXP_NAME $BATCH_SIZE $LORA
+# jid3=$(sbatch --parsable eval_beir_corpus.sh $MODEL $DATA $EXP_NAME $BATCH_SIZE $LORA $METHOD_NAME)
+# sbatch --dependency=afterok:$jid3 eval_beir_query.sh $MODEL $DATA $EXP_NAME $BATCH_SIZE $LORA $METHOD_NAME
 
 # MODEL="gte"
-# DATA="time_sensitive_qa"
-# EXP_NAME="matryoshka_baseline"
 # BATCH_SIZE="2048"
-# LORA="--lora"
 
-# jid4=$(sbatch --parsable /home/thuy0050/code/tevatron/src/tevatron/louis/scripts/eval_beir/eval_beir_corpus.sh $MODEL $DATA $EXP_NAME $BATCH_SIZE $LORA)
-
-# sbatch --dependency=afterok:$jid4 /home/thuy0050/code/tevatron/src/tevatron/louis/scripts/eval_beir/eval_beir_query.sh $MODEL $DATA $EXP_NAME $BATCH_SIZE $LORA
+# jid4=$(sbatch --parsable eval_beir_corpus.sh $MODEL $DATA $EXP_NAME $BATCH_SIZE $LORA $METHOD_NAME)
+# sbatch --dependency=afterok:$jid4 eval_beir_query.sh $MODEL $DATA $EXP_NAME $BATCH_SIZE $LORA $METHOD_NAME
 
 
 # MODEL="gte1.5"
-# DATA="time_sensitive_qa"
-# EXP_NAME="matryoshka_baseline"
 # BATCH_SIZE="2048"
-# LORA="--lora"
 
-# jid5=$(sbatch --parsable /home/thuy0050/code/tevatron/src/tevatron/louis/scripts/eval_beir/eval_beir_corpus.sh $MODEL $DATA $EXP_NAME $BATCH_SIZE $LORA)
-
-# sbatch --dependency=afterok:$jid5 /home/thuy0050/code/tevatron/src/tevatron/louis/scripts/eval_beir/eval_beir_query.sh $MODEL $DATA $EXP_NAME $BATCH_SIZE $LORA
+# jid5=$(sbatch --parsable eval_beir_corpus.sh $MODEL $DATA $EXP_NAME $BATCH_SIZE $LORA $METHOD_NAME)
+# sbatch --dependency=afterok:$jid5 eval_beir_query.sh $MODEL $DATA $EXP_NAME $BATCH_SIZE $LORA $METHOD_NAME
 
 
 # MODEL="nomic"
-# DATA="time_sensitive_qa"
-# EXP_NAME="matryoshka_baseline"
 # BATCH_SIZE="2048"
-# LORA="--lora"
 
-# jid6=$(sbatch --parsable /home/thuy0050/code/tevatron/src/tevatron/louis/scripts/eval_beir/eval_beir_corpus.sh $MODEL $DATA $EXP_NAME $BATCH_SIZE $LORA)
-
-# sbatch --dependency=afterok:$jid6 /home/thuy0050/code/tevatron/src/tevatron/louis/scripts/eval_beir/eval_beir_query.sh $MODEL $DATA $EXP_NAME $BATCH_SIZE $LORA
+# jid6=$(sbatch --parsable eval_beir_corpus.sh $MODEL $DATA $EXP_NAME $BATCH_SIZE $LORA $METHOD_NAME)
+# sbatch --dependency=afterok:$jid6 eval_beir_query.sh $MODEL $DATA $EXP_NAME $BATCH_SIZE $LORA $METHOD_NAME

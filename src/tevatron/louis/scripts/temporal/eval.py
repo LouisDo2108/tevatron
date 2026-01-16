@@ -14,6 +14,12 @@ def main():
         type=str,
         help="Model name, e.g. bge | bgem3 | contriever | gte | nomic | qwen3",
     )
+    parser.add_argument(
+        "--method_name",
+        default="temporal",
+        type=str,
+        help="Method name, e.g. temporal, madaptor, tempretriever, ts-retriever, zero-shot",
+    )
     parser.add_argument("--exp_name", default="dev", type=str)
     parser.add_argument(
         "--data",
@@ -29,6 +35,7 @@ def main():
     parser.add_argument("--lora", action="store_true", help="Use LoRA for training.", default=False)
     parser.add_argument("--lora_r", default=4, type=int)
     parser.add_argument("--lora_alpha", default=4, type=int)
+
     parser.add_argument("--lr", default=1e-4, type=float)
     parser.add_argument("--batch_size", default=256, type=int)
     parser.add_argument("--eval_batch_size", default=512, type=int)
@@ -62,7 +69,7 @@ def main():
     CODE_DIR = HOME / "code" / "tevatron" / "src" / "tevatron"
     DATA_ROOT = HOME / "mg61_scratch2" / "thuy0050" / "data" / "third_work"
     OUTPUT_ROOT = HOME / "mg61_scratch2" / "thuy0050" / "exp" / "tevatron"
-    MODEL_NAME = "temporal"
+    METHOD_NAME = args.method_name
 
     data_name = args.data
     exp_name = args.exp_name
@@ -77,13 +84,24 @@ def main():
     cfg = configs[model_name]
 
     backbone = cfg["checkpoint"]
-    output_dir = OUTPUT_ROOT / data_name / MODEL_NAME / backbone / exp_name
+    output_dir = OUTPUT_ROOT / data_name / METHOD_NAME / backbone / exp_name
     output_dir.mkdir(parents=True, exist_ok=True)
 
     lora_eval = ""
     if args.lora:
         lora_train = f"--lora --lora_r {args.lora_r} --lora_alpha {args.lora_alpha} --lora_target_modules all-linear"
         lora_eval = f"--lora_name_or_path {output_dir}"
+        
+    encode_file_name = "encode.py"
+    adaptor_dim = ""
+
+    if METHOD_NAME == "madaptor":
+        adaptor_dim = f"--adaptor_dim {cfg['adaptor_dim']}"
+        encode_file_name = "encode_madaptor.py"
+    elif METHOD_NAME == "tempretriever":
+        encode_file_name = "encode_tempretriever_no_temporal.py"
+    else:
+        encode_file_name = "encode.py"
 
     matryoshka_dim_list = []
     if args.matryoshka_dim_list:
@@ -95,9 +113,8 @@ def main():
     for m in matryoshka_dim_list: 
         # ==== COMMANDS ====
         encode_corpus_cmd = f"""
-        python {CODE_DIR}/retriever/driver/encode.py \
+        python {CODE_DIR}/retriever/driver/{encode_file_name} \
             --per_device_eval_batch_size {eval_batch_size} \
-            --passage_max_len 512 \
             --pooling {cfg['pooling']} \
             --bf16 \
             --normalize \
@@ -107,17 +124,15 @@ def main():
             --encode_output_path {output_dir}/corpus_emb_{m}.pkl \
             --model_name_or_path {output_dir} \
             {lora_eval} \
-            --overwrite_output_dir \
-            --dataloader_num_workers 8 \
             --query_prefix {cfg['query_prefix']} \
             --passage_prefix {cfg['passage_prefix']} \
             --padding_side {cfg['padding_side']} \
-            --matryoshka_dim {m}
+            --matryoshka_dim {m} \
+            {adaptor_dim}
         """
         encode_query_cmd = f"""
-        python {CODE_DIR}/retriever/driver/encode.py \
+        python {CODE_DIR}/retriever/driver/{encode_file_name} \
             --per_device_eval_batch_size {eval_batch_size} \
-            --query_max_len 512 \
             --pooling {cfg['pooling']} \
             --bf16 \
             --normalize \
@@ -128,12 +143,11 @@ def main():
             --model_name_or_path {output_dir} \
             {lora_eval} \
             --encode_output_path {output_dir}/queries_emb_{m}.pkl \
-            --overwrite_output_dir \
-            --dataloader_num_workers 8 \
             --query_prefix {cfg['query_prefix']} \
             --passage_prefix {cfg['passage_prefix']} \
             --padding_side {cfg['padding_side']} \
-            --matryoshka_dim {m}
+            --matryoshka_dim {m} \
+            {adaptor_dim}
         """
         retrieval_cmd = f"""
         set -f && OMP_NUM_THREADS=16 python -m tevatron.retriever.driver.search \
@@ -154,15 +168,6 @@ def main():
             {DATA_ROOT}/temporal/{data_name}/test/qrel.txt \
             {output_dir}/rank.trec > {output_dir}/out_{m}.txt
         """
-        # && python {CODE_DIR}/louis/beir_scripts/eval_nanobeir_with_sbert.py \
-        #     --model_name_or_path {output_dir} \
-        #     --nanobeir_datasets NQ \
-        #     --pooling {cfg['pooling']} \
-        #     --bf16 \
-        #     --query_prompts {cfg['query_prefix']} \
-        #     --corpus_prompts {cfg['passage_prefix']} \
-        #     --matryoshka_dim {m} > {output_dir}/out_nanobeir_nq_{m}.txt
-
         # ==== EXECUTION ====
         run([encode_corpus_cmd, encode_query_cmd])
         run([retrieval_cmd])

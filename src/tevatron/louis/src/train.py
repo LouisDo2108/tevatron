@@ -4,25 +4,25 @@ from copy import deepcopy
 from dataclasses import asdict
 from pathlib import Path
 from pdb import set_trace as st
+import random
 
 import wandb
-from collator import TemporalReconCollator
-from dataset import TemporalDataset
-from models import MAdaptor
-from trainer import MAdaptorTrainer as Trainer
+from tevatron.louis.src.collator import TemporalReconCollator, TempRetrieverCollator
+from tevatron.louis.src.dataset import TemporalDataset
+from tevatron.louis.src.models import TemporalProjectorReconstruction, MAdaptor, TempRetriever
+from tevatron.louis.src.trainer import MAdaptorTrainer as Trainer
 from tevatron.retriever.collator import TrainCollator
 from transformers import AutoConfig, AutoTokenizer
-from utils import get_params_info, init, write_json
+from tevatron.louis.src.utils import get_params_info, init, write_json
+from tevatron.retriever.arguments import DataArguments
+from datasets import load_dataset
 
 from tevatron.retriever.dataset import TrainDataset
-from tevatron.retriever.gc_trainer import GradCacheTrainer as GCTrainer
 
 logger = logging.getLogger(__name__)
 
 
-def main():
-    model_args, data_args, training_args = init()
-
+def get_tokenizer(model_args, data_args):
     try:
         default_config = AutoConfig.from_pretrained(model_args.model_name_or_path, trust_remote_code=True)
     except Exception as e:
@@ -47,8 +47,25 @@ def main():
         tokenizer.padding_side = "right"
     else:
         tokenizer.padding_side = "left"
+    return default_config, tokenizer
 
-    if training_args.enhanced_temporal:
+
+MODEL_CLS_DICT = {
+    "temporal": TemporalProjectorReconstruction,
+    "madaptor": MAdaptor,
+    "tempretriever": TempRetriever,
+}
+
+
+def main():
+    model_args, data_args, training_args = init()
+
+    default_config, tokenizer = get_tokenizer(model_args, data_args)
+    
+    if training_args.method_name == "tempretriever":
+        train_dataset = TemporalDataset(data_args)
+        collator = TempRetrieverCollator(data_args, tokenizer)
+    elif training_args.enhanced_temporal:
         train_dataset = TemporalDataset(data_args)
         collator = TemporalReconCollator(
             data_args, tokenizer, max_temporal_length=training_args.max_temporal_length
@@ -61,7 +78,6 @@ def main():
     if data_args.eval_dataset_path is not None:
         eval_data_args = deepcopy(data_args)
         eval_data_args.dataset_path = data_args.eval_dataset_path
-        # eval_data_args.dataset_split = "eval"
         eval_data_args.train_group_size = 2
         eval_dataset = TrainDataset(eval_data_args)
     else:
@@ -69,28 +85,61 @@ def main():
         training_args.save_strategy = "epoch"
         training_args.load_best_model_at_end = False
 
-    model = MAdaptor.build(
+    method_name = training_args.method_name
+    MODEL_CLS = MODEL_CLS_DICT[method_name]
+
+    model = MODEL_CLS.build(
         model_args,
         training_args,
         cache_dir=model_args.cache_dir,
         dtype=default_config.dtype,
-        attn_implementation=model_args.attn_implementation,
     )
-    
-    for k, v in model.named_parameters():
-        if "adaptor" not in k:
-            v.requires_grad = False
+    if method_name == "madaptor":
+        for k, v in model.named_parameters():
+            if "adaptor" not in k:
+                v.requires_grad = False
+    elif method_name == "tempretriever":
+        for k, v in model.named_parameters():
+            v.requires_grad = True
+            
+        def get_params_info(model):
+            all_param = 0
+            trainable_param = 0
 
+            print("\nAll trainable parameters:")
+            for name, param in model.named_parameters():
+                all_param += param.numel()
+
+                if param.requires_grad:
+                    trainable_param += param.numel()
+                    print(name, param.numel())
+
+            print(
+                f"trainable params: {trainable_param:,} || all params: {all_param:,} || trainable%: {trainable_param / all_param * 100:.2f}"
+            )
     get_params_info(model)
-    trainer_cls = GCTrainer if training_args.grad_cache else Trainer
-    trainer = trainer_cls(
+
+    trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         data_collator=collator,
     )
-    trainer.madaptor = True
+    
+    if method_name == "madaptor":
+        try:
+            if hasattr(trainer, 'madaptor'):
+                trainer.madaptor = True
+        except Exception as e:
+            print("Cannot set madaptor attribute to trainer.")
+    elif method_name == "tempretriever":
+        try:
+            if hasattr(trainer, 'tempretriever'):
+                trainer.tempretriever = True
+        except Exception as e:
+            print("Cannot set tempretriever attribute to trainer.")
+
     train_dataset.set_trainer(trainer)
 
     if eval_dataset is not None:

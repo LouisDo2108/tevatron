@@ -235,7 +235,7 @@ def main():
 
     encoded = []
     lookup_indices = []
-    model.to(training_args.device)
+    model = model.to(training_args.device)
     model.eval()
 
     print(

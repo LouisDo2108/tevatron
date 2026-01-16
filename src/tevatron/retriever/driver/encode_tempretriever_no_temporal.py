@@ -7,6 +7,7 @@ from torch import Tensor
 from contextlib import nullcontext
 from datasets import load_dataset, load_from_disk
 from pdb import set_trace as st
+from time import perf_counter
 
 from transformers import PreTrainedTokenizer
 from dataclasses import dataclass
@@ -362,7 +363,7 @@ def main():
 
     encoded = []
     lookup_indices = []
-    model.to(training_args.device)
+    model = model.to(training_args.device)
     model.eval()
     model.base_model.eval()
 

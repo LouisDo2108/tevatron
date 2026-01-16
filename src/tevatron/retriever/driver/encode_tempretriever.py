@@ -360,53 +360,43 @@ def main():
         num_workers=training_args.dataloader_num_workers,
         worker_init_fn=lambda _: init_sutime(),
     )
-    
-    model.to(training_args.device)
+
+    encoded = []
+    lookup_indices = []
+    model = model.to(training_args.device)
     model.eval()
     model.base_model.eval()
 
-    time_results = []
-
-    for _ in range(1):
-        encoded = []
-        lookup_indices = []
-
-        print(
-            f"Using {type(model)} from this pretrained path {model_args.model_name_or_path}."
-        )
-        
-        start = perf_counter()
-        
-        for (batch_ids, batch, batch_temporal) in tqdm(encode_loader):
-            lookup_indices.extend(batch_ids)
-            with (
-                torch.autocast(
-                    "cuda", dtype=torch.float16 if training_args.fp16 else torch.bfloat16
-                )
-                if training_args.fp16 or training_args.bf16
-                else nullcontext()
-            ):
-                with torch.no_grad():
-                    for k, v in batch.items():
-                        batch[k] = batch[k].to(training_args.device)
-                        batch_temporal[k] = batch_temporal[k].to(training_args.device)
-                    if data_args.encode_is_query:
-                        model_output = model(query=batch, qt=batch_temporal)
-                        q_reps = model_output.q_reps.cpu().detach().numpy()
-                        qt_reps = model_output.qt_reps.cpu().detach().numpy()
-                        # vectors = np.concatenate([q_reps, qt_reps], axis=1)
-                        vectors = q_reps * qt_reps
-                        encoded.append(vectors)
-                    else:
-                        model_output = model(passage=batch, pt=batch_temporal)
-                        p_reps = model_output.p_reps.cpu().detach().numpy()
-                        pt_reps = model_output.pt_reps.cpu().detach().numpy()
-                        # vectors = np.concatenate([p_reps, pt_reps], axis=1)
-                        vectors = p_reps * pt_reps
-                        encoded.append(vectors)
-        end = perf_counter()
-        time_results.append(end-start)
-    print(np.array(time_results).mean())
+    print(
+        f"Using {type(model)} from this pretrained path {model_args.model_name_or_path}."
+    )
+    for (batch_ids, batch, batch_temporal) in tqdm(encode_loader):
+        lookup_indices.extend(batch_ids)
+        with (
+            torch.autocast(
+                "cuda", dtype=torch.float16 if training_args.fp16 else torch.bfloat16
+            )
+            if training_args.fp16 or training_args.bf16
+            else nullcontext()
+        ):
+            with torch.no_grad():
+                for k, v in batch.items():
+                    batch[k] = batch[k].to(training_args.device)
+                    batch_temporal[k] = batch_temporal[k].to(training_args.device)
+                if data_args.encode_is_query:
+                    model_output = model(query=batch, qt=batch_temporal)
+                    q_reps = model_output.q_reps.cpu().detach().numpy()
+                    qt_reps = model_output.qt_reps.cpu().detach().numpy()
+                    # vectors = np.concatenate([q_reps, qt_reps], axis=1)
+                    vectors = q_reps * qt_reps
+                    encoded.append(vectors)
+                else:
+                    model_output = model(passage=batch, pt=batch_temporal)
+                    p_reps = model_output.p_reps.cpu().detach().numpy()
+                    pt_reps = model_output.pt_reps.cpu().detach().numpy()
+                    # vectors = np.concatenate([p_reps, pt_reps], axis=1)
+                    vectors = p_reps * pt_reps
+                    encoded.append(vectors)
 
     encoded = np.concatenate(encoded).astype(np.float16)
 

@@ -149,7 +149,6 @@ class DataArguments:
     encode_output_path: str = field(default=None, metadata={"help": "where to save the encode"})
 
     query_max_len: Optional[int] = field(
-        # default=32,
         default=512,
         metadata={
             "help": "The maximum total input sequence length after tokenization for query. Sequences longer "
@@ -157,7 +156,6 @@ class DataArguments:
         },
     )
     passage_max_len: Optional[int] = field(
-        # default=128,
         default=512,
         metadata={
             "help": "The maximum total input sequence length after tokenization for passage. Sequences longer "
@@ -214,7 +212,7 @@ class DataArguments:
 class TevatronTrainingArguments(TrainingArguments):
     output_dir: str = field(default="/home/thuy0050/mg61_scratch2/thuy0050/exp/tevatron")
     warmup_ratio: float = field(default=0.1)
-
+    logging_steps: int = field(default=10)
     grad_cache: bool = field(default=False, metadata={"help": "Use gradient cache update"})
     gc_q_chunk_size: int = field(default=4)
     gc_p_chunk_size: int = field(default=32)
@@ -234,22 +232,11 @@ class TevatronTrainingArguments(TrainingArguments):
             )
         },
     )
-
-    # # For SentenceBertStyle dataset
-    # batch_sampler: BatchSamplers = field(
-    #     default=BatchSamplers.BATCH_SAMPLER,
-    # )
-    # multi_dataset_batch_sampler: MultiDatasetBatchSamplers = field(
-    #     default=MultiDatasetBatchSamplers.PROPORTIONAL,
-    # )
+    method_name: str = field(
+        default="temporal", 
+        metadata={"help": "Method name, e.g. temporal, madaptor, tempretriever, ts-retriever, zero-shot"}
+    )
     modules_to_save: List[str] = field(default_factory=lambda: [])
-
-    # madaptor specific
-    # matryoshka: bool = field(default=False) # This will enable the loss for semantic matryoshka embeddings (512-768)
-
-    # Following flags will be considered if the temporal flag is true
-    # temporal_as_sentence: bool = field(default=False)
-    # extracted_temporal: bool = field(default=False)
 
     matryoshka_dim: int = field(default=768)
     matryoshka_dim_list: List[int] = field(default_factory=lambda:[768])
