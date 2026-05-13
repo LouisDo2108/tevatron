@@ -63,6 +63,7 @@ def main():
     args = parser.parse_args()
 
     index_files = glob.glob(args.passage_reps)
+
     logger.info(f'Pattern match found {len(index_files)} files; loading them into index.')
 
     p_reps_0, p_lookup_0 = pickle_load(index_files[0])

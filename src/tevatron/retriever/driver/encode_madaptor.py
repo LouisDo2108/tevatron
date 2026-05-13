@@ -97,12 +97,13 @@ class MAdaptor(DenseModel):
             logger.info("Consider your model as a normal model.")
             
             base_model = cls.try_using_flash_attn(default_config['model_name_or_path'], hf_kwargs)
-            model = cls(
-                encoder=base_model,
-                pooling=pooling,
-                normalize=normalize,
-                training_args=training_args,
-            )
+
+        model = cls(
+            encoder=base_model,
+            pooling=pooling,
+            normalize=normalize,
+            training_args=training_args,
+        )
 
         if os.path.exists(os.path.join(model_name_or_path, "adaptor.safetensors")):
             adaptor_state_dict = safetensors.torch.load_file(

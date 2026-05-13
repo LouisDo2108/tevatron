@@ -1,35 +1,28 @@
 import logging
 import os
 import pickle
-import sys
-from typing import Dict, List, Optional
-from torch import Tensor
-from contextlib import nullcontext
-from datasets import load_dataset, load_from_disk
-from pdb import set_trace as st
-from time import perf_counter
-
-from transformers import PreTrainedTokenizer
-from dataclasses import dataclass
 import random
+import sys
+from contextlib import nullcontext
+from dataclasses import dataclass
+from pdb import set_trace as st
+
 import numpy as np
 import torch
-from torch.utils.data import DataLoader
+from datasets import load_dataset
+from sutime import SUTime
+
+# from tevatron.retriever.collator import EncodeCollator
+from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
-from transformers import AutoTokenizer, HfArgumentParser
+from transformers import AutoTokenizer, HfArgumentParser, PreTrainedTokenizer
+from transformers.file_utils import ModelOutput
 from transformers.utils.import_utils import is_torch_available
 
+from tevatron.louis.src.models import TempRetriever
 from tevatron.retriever.arguments import DataArguments, ModelArguments
 from tevatron.retriever.arguments import TevatronTrainingArguments as TrainingArguments
-# from tevatron.retriever.collator import EncodeCollator
-from torch.utils.data import Dataset
-
-# from tevatron.retriever.dataset import EncodeDataset
 from tevatron.retriever.modeling import DenseModel
-from transformers.file_utils import ModelOutput
-from tevatron.louis.src.models import TempRetriever
-
-from sutime import SUTime
 
 # sutime_instance = SUTime(mark_time_ranges=True, include_range=True)
 
@@ -41,20 +34,11 @@ def init_sutime():
 logger = logging.getLogger(__name__)
 
 import torch.multiprocessing as mp
+
 try:
     mp.set_start_method('fork', force=True)
 except Exception as e:
     logger.info("forked")
-
-
-# @dataclass
-# class EncoderOutput(ModelOutput):
-#     q_reps: Optional[Tensor] = None
-#     p_reps: Optional[Tensor] = None
-#     qt_reps: Optional[Tensor] = None
-#     pt_reps: Optional[Tensor] = None
-#     loss: Optional[Tensor] = None
-#     scores: Optional[Tensor] = None
 
 
 class EncodeDataset(Dataset):
@@ -207,42 +191,6 @@ class EncodeCollator:
         return content_ids, collated_inputs, collated_temporal_inputs
 
 
-# class TempRetriever(DenseModel):
-#     def __init__(self, *args, **kwargs):
-#         super(TempRetriever, self).__init__(*args, **kwargs)
-
-#     def forward(
-#         self,
-#         query: Dict[str, Tensor] = None,
-#         query_temporal: Dict[str, Tensor] = None,
-#         passage: Dict[str, Tensor] = None,
-#         passage_temporal: Dict[str, Tensor] = None,
-#     ):
-
-#         # Copy from EncoderModel's forward
-#         q_reps = self.encode_query(query) if query else None
-#         qt_reps = self.encode_query(query_temporal) if query_temporal else None
-
-#         p_reps = self.encode_query(passage) if passage else None
-#         pt_reps = self.encode_query(passage_temporal) if passage_temporal else None
-
-#         # for inference
-#         if q_reps is None or p_reps is None:
-#             return EncoderOutput(q_reps=q_reps, qt_reps=qt_reps, p_reps=p_reps, pt_reps=pt_reps)
-
-#         # for eval
-#         scores = self.compute_similarity(q_reps, p_reps)
-#         loss = None
-
-#         return EncoderOutput(
-#             loss=loss,
-#             scores=scores,
-#             q_reps=q_reps,
-#             qt_reps=qt_reps,
-#             p_reps=p_reps,
-#             pt_reps=pt_reps,
-#         )
-
 def get_params_info(model):
     all_param = 0
     trainable_param = 0
@@ -353,11 +301,11 @@ def main():
 
     encode_loader = DataLoader(
         encode_dataset,
-        batch_size=training_args.per_device_eval_batch_size,
+        batch_size=128, # training_args.per_device_eval_batch_size,
         collate_fn=encode_collator,
         shuffle=False,
         drop_last=False,
-        num_workers=training_args.dataloader_num_workers,
+        num_workers=12, # training_args.dataloader_num_workers,
         worker_init_fn=lambda _: init_sutime(),
     )
 

@@ -39,8 +39,8 @@ def main():
 
     # ==== PATHS ====
     HOME = Path("/home/thuy0050")
-    CODE_DIR = HOME / "code" / "tevatron"
-    DATA_ROOT = HOME / "mg61_scratch2" / "thuy0050" / "data" / "third_work"
+    CODE_DIR = HOME / "code" / "TMRL"
+    DATA_ROOT = HOME / "mg61_scratch2" / "thuy0050" / "data" / "tmrl"
     OUTPUT_ROOT = HOME / "mg61_scratch2" / "thuy0050" / "exp" / "tevatron"
     DATA_NAME = args.data
     EXP_NAME = args.exp_name

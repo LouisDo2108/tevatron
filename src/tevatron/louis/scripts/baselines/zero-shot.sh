@@ -47,26 +47,26 @@ export PYTORCH_ALLOC_CONF=garbage_collection_threshold:0.6
 cd /home/thuy0050/code/tevatron/src/tevatron/louis/scripts/baselines
 # time_sensitive_qa temporal_nobel_prize
 
-python zero-shot.py \
-    --model contriever \
-    --data time_sensitive_qa 
+# python zero-shot.py \
+#     --model contriever \
+#     --data time_sensitive_qa 
 
-python zero-shot.py \
-    --model bge \
-    --data time_sensitive_qa 
+# python zero-shot.py \
+#     --model bge \
+#     --data time_sensitive_qa 
 
-python zero-shot.py \
-    --model gte \
-    --data time_sensitive_qa 
+# python zero-shot.py \
+#     --model gte \
+#     --data time_sensitive_qa 
 
 python zero-shot.py \
     --model nomic \
-    --data time_sensitive_qa 
+    --data temporal_nobel_prize 
 
-python zero-shot.py \
-    --model gte1.5 \
-    --data time_sensitive_qa 
+# python zero-shot.py \
+#     --model gte1.5 \
+#     --data time_sensitive_qa 
 
-python zero-shot.py \
-    --model bgem3 \
-    --data time_sensitive_qa 
+# python zero-shot.py \
+#     --model bgem3 \
+#     --data time_sensitive_qa 

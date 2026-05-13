@@ -2,20 +2,21 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from collections import defaultdict
 from collections.abc import Iterator
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-import time
+from contextlib import nullcontext
 from pdb import set_trace as st
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
 import safetensors.torch
 import torch
 import torch.distributed as dist
 import torch.nn.functional as F
 from datasets import Dataset
 from transformers.trainer import TRAINING_ARGS_NAME
-from transformers.trainer_utils import SaveStrategy, has_length
 from transformers.trainer_pt_utils import find_batch_size
-from contextlib import nullcontext
+from transformers.trainer_utils import SaveStrategy, has_length
 
 from tevatron.retriever.trainer import TevatronTrainer
 
@@ -76,7 +77,7 @@ class MAdaptorTrainer(TevatronTrainer):
                 # # Remove the encoder of Tevatron's DenseModel wrapper.
                 # prefix = "encoder."
                 # model_state_dict = {(k[len(prefix):] if k.startswith(prefix) else k): v for k, v in state_dict.items()}
-                
+
                 self.model.encoder.save_pretrained(output_dir,state_dict=state_dict,safe_serialization=self.args.save_safetensors)
             else:
                 # Remove the base_model which is only used for KL loss
@@ -150,8 +151,7 @@ class MAdaptorTrainer(TevatronTrainer):
         else:
             q_reps = model.encode_query(query) if query else None
             p_reps = model.encode_passage(passage) if passage else None
-        
-        
+
         metrics = {}
         for m in self.model.matryoshka_dim_list:
 
@@ -179,10 +179,6 @@ class MAdaptorTrainer(TevatronTrainer):
                     f"neg_sim_{m}": neg_sim,
                 })
         return metrics
-
-        # loss = F.cross_entropy(scores_semantic / self.model.temperature, target, reduction="none")
-        # # losses = {"loss": loss}
-        # return loss
 
     def training_step(self, *args):
         return (
@@ -391,16 +387,6 @@ class MAdaptorTrainer(TevatronTrainer):
         if hasattr(self.optimizer, "eval") and callable(self.optimizer.eval):
             self.optimizer.eval()
 
-        # # This is for NaiveTemporalv4
-        # adapters = ["semantic", "temporal"]
-        # weights = [1.0, 1.0]
-        # adapter_name = "merge"
-        # density = 0.2
-        # model.encoder.add_weighted_adapter(
-        #     adapters, weights, adapter_name, combination_type="dare_ties", density=density
-        # )
-        # model.encoder.set_adapter("merge")
-
         self.callback_handler.eval_dataloader = eval_dataloader
         # Do this before wrapping.
         eval_dataset = getattr(eval_dataloader, "dataset", None)
@@ -462,7 +448,7 @@ class MAdaptorTrainer(TevatronTrainer):
             eval_loss[f"eval_margin_{m}"] = round(
                 eval_loss[f"eval_pos_sim_{m}"] - eval_loss[f"eval_neg_sim_{m}"], 4
             )
-            
+
             # avg_loss = round(torch.concat(total_loss).mean().item(), 2)
             # avg_recall1 = round(torch.concat(total_correct1).mean().item(), 4)
             # avg_recall5 = round(torch.concat(total_correct5).mean().item(), 4)

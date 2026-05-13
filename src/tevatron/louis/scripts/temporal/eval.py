@@ -16,9 +16,9 @@ def main():
     )
     parser.add_argument(
         "--method_name",
-        default="temporal",
+        default="tmrl",
         type=str,
-        help="Method name, e.g. temporal, madaptor, tempretriever, ts-retriever, zero-shot",
+        help="Method name, e.g. tmrl, madaptor, tempretriever, ts-retriever, zero-shot, mrl, lora",
     )
     parser.add_argument("--exp_name", default="dev", type=str)
     parser.add_argument(
@@ -66,8 +66,8 @@ def main():
 
     # ==== PATHS ====
     HOME = Path("/home/thuy0050")
-    CODE_DIR = HOME / "code" / "tevatron" / "src" / "tevatron"
-    DATA_ROOT = HOME / "mg61_scratch2" / "thuy0050" / "data" / "third_work"
+    CODE_DIR = HOME / "code" / "TMRL" / "src" / "tevatron"
+    DATA_ROOT = HOME / "mg61_scratch2" / "thuy0050" / "data" / "tmrl"
     OUTPUT_ROOT = HOME / "mg61_scratch2" / "thuy0050" / "exp" / "tevatron"
     METHOD_NAME = args.method_name
 
@@ -160,8 +160,7 @@ def main():
 
         && python -m tevatron.utils.format.convert_result_to_trec \
             --input {output_dir}/rank.txt \
-            --output {output_dir}/rank.trec \
-            --remove_query
+            --output {output_dir}/rank.trec
 
         && python -m pyserini.eval.trec_eval -c \
             -m recall.10,100 -m ndcg_cut.10 -M 100 \

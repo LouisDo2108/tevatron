@@ -38,8 +38,8 @@ def main():
 
     # ==== PATHS ====
     HOME = Path("/home/thuy0050")
-    CODE_DIR = HOME / "code" / "tevatron"
-    DATA_ROOT = HOME / "mg61_scratch2" / "thuy0050" / "data" / "third_work"
+    CODE_DIR = HOME / "code" / "TMRL"
+    DATA_ROOT = HOME / "mg61_scratch2" / "thuy0050" / "data" / "tmrl"
     OUTPUT_ROOT = HOME / "mg61_scratch2" / "thuy0050" / "exp" / "tevatron"
     DATA_NAME = args.data
     EXP_NAME = args.exp_name
@@ -53,13 +53,13 @@ def main():
     backbone = str(cfg["checkpoint"])
     output_dir = OUTPUT_ROOT / DATA_NAME / METHOD_NAME / backbone / EXP_NAME
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     batch_size = args.batch_size
 
     lora_eval = ""
     if args.lora:
         lora_eval = f"--lora_name_or_path {output_dir}"
-    
+
     encode_file_name = "encode.py"
     adaptor_dim = ""
 
@@ -80,7 +80,7 @@ def main():
         --encode_is_query \
         --dataset_name Tevatron/beir \
         --dataset_config nq \
-        --dataset_split 'test' \
+        --dataset_split test \
         --encode_output_path {output_dir}/queries_emb_beir_nq.pkl \
         --model_name_or_path {output_dir} \
         {lora_eval} \

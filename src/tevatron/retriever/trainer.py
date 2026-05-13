@@ -386,11 +386,11 @@ class MAdaptorTrainer(TevatronTrainer):
         batch_size = self.args.eval_batch_size
 
         # logger.info(f"\n***** Running {description} *****")
-        if has_length(eval_dataloader):
-            logger.info(f"  Num examples = {self.num_examples(eval_dataloader)}")
-        else:
-            logger.info("  Num examples: Unknown")
-        logger.info(f"  Batch size = {batch_size}")
+        # if has_length(eval_dataloader):
+        #     logger.info(f"  Num examples = {self.num_examples(eval_dataloader)}")
+        # else:
+        #     logger.info("  Num examples: Unknown")
+        # logger.info(f"  Batch size = {batch_size}")
 
         model.eval()
         if hasattr(self.optimizer, "eval") and callable(self.optimizer.eval):

@@ -1,20 +1,19 @@
-import os
 import glob
 import logging
+import os
 import pickle
 from argparse import ArgumentParser
 from itertools import chain
+from pdb import set_trace as st
 
 import faiss
 import numpy as np
-from tqdm import tqdm
 import pandas as pd
-
-from tevatron.retriever.searcher import FaissFlatSearcher
 import torch.nn.functional as F
 from numpy import linalg as LA
+from tqdm import tqdm
 
-from pdb import set_trace as st
+from tevatron.retriever.searcher import FaissFlatSearcher
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -22,6 +21,47 @@ logging.basicConfig(
     datefmt="%m/%d/%Y %H:%M:%S",
     level=logging.INFO,
 )
+
+
+class FaissFlatFunnelSearcher:
+    def __init__(self, init_reps: np.ndarray):
+        self.semantic_dim = 512 # Hard-coded for now
+        self.temporal_dim = init_reps.shape[1] - self.semantic_dim
+        print(f"Semantic dim {self.semantic_dim}")
+        print(f"Temporal dim {self.temporal_dim}")
+        
+        self.semantic_index = faiss.IndexFlatIP(self.semantic_dim)
+        self.temporal_index = faiss.IndexFlatIP(self.temporal_dim)
+        self.index = faiss.IndexFlatIP(init_reps.shape[1])
+
+    def add(self, p_reps: np.ndarray, temporal=False, semantic=False):
+        # assert temporal ^ semantic, "Only temporal or Only semantic"
+        if semantic:
+            return self.semantic_index.add(p_reps)
+        if temporal:
+            return self.temporal_index.add(p_reps)
+        self.index.add(p_reps)
+
+    def search(self, q_reps: np.ndarray, k: int, temporal=False, semantic=False):
+        # assert temporal ^ semantic, "Only temporal or Only semantic"
+        if semantic:
+            return self.semantic_index.search(q_reps, k)
+        if temporal:
+            return self.temporal_index.search(q_reps, k)
+        return self.index.search(q_reps, k)
+
+    def batch_search(self, q_reps: np.ndarray, k: int, batch_size: int, quiet: bool=False, temporal=False, semantic=False):
+        num_query = q_reps.shape[0]
+        all_scores = []
+        all_indices = []
+        for start_idx in tqdm(range(0, num_query, batch_size), disable=quiet):
+            nn_scores, nn_indices = self.search(q_reps[start_idx: start_idx + batch_size], k, temporal=temporal, semantic=semantic)
+            all_scores.append(nn_scores)
+            all_indices.append(nn_indices)
+        all_scores = np.concatenate(all_scores, axis=0)
+        all_indices = np.concatenate(all_indices, axis=0)
+
+        return all_scores, all_indices
 
 
 def search_queries(retriever, q_reps, p_lookup, depth, args):
@@ -64,47 +104,6 @@ def pickle_load(path):
 def pickle_save(obj, path):
     with open(path, 'wb') as f:
         pickle.dump(obj, f)
-
-
-class FaissFlatFunnelSearcher:
-    def __init__(self, init_reps: np.ndarray):
-        self.semantic_dim = 512 # Hard-coded for now
-        self.temporal_dim = init_reps.shape[1] - self.semantic_dim
-        print(f"Semantic dim {self.semantic_dim}")
-        print(f"Temporal dim {self.temporal_dim}")
-        
-        self.semantic_index = faiss.IndexFlatIP(self.semantic_dim)
-        self.temporal_index = faiss.IndexFlatIP(self.temporal_dim)
-        self.index = faiss.IndexFlatIP(init_reps.shape[1])
-
-    def add(self, p_reps: np.ndarray, temporal=False, semantic=False):
-        # assert temporal ^ semantic, "Only temporal or Only semantic"
-        if semantic:
-            return self.semantic_index.add(p_reps)
-        if temporal:
-            return self.temporal_index.add(p_reps)
-        self.index.add(p_reps)
-
-    def search(self, q_reps: np.ndarray, k: int, temporal=False, semantic=False):
-        # assert temporal ^ semantic, "Only temporal or Only semantic"
-        if semantic:
-            return self.semantic_index.search(q_reps, k)
-        if temporal:
-            return self.temporal_index.search(q_reps, k)
-        return self.index.search(q_reps, k)
-
-    def batch_search(self, q_reps: np.ndarray, k: int, batch_size: int, quiet: bool=False, temporal=False, semantic=False):
-        num_query = q_reps.shape[0]
-        all_scores = []
-        all_indices = []
-        for start_idx in tqdm(range(0, num_query, batch_size), disable=quiet):
-            nn_scores, nn_indices = self.search(q_reps[start_idx: start_idx + batch_size], k, temporal=temporal, semantic=semantic)
-            all_scores.append(nn_scores)
-            all_indices.append(nn_indices)
-        all_scores = np.concatenate(all_scores, axis=0)
-        all_indices = np.concatenate(all_indices, axis=0)
-
-        return all_scores, all_indices
 
 
 def run_temporal_retrieval(retriever, p_reps_0, q_reps, look_up, q_lookup, res, co, temporal_k, args, root_dir):
@@ -166,7 +165,6 @@ def load_faiss_index_to_device(retriever):
             co.useFloat16 = True
             retriever.index = faiss.index_cpu_to_all_gpus(retriever.index, co,
                                                         ngpu=num_gpus)
-
 
 
 def main():

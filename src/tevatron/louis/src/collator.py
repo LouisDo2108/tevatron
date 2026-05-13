@@ -403,21 +403,22 @@ class TemporalReconCollator(TrainCollator):
             )
 
             return q_collated, d_collated
+            # return (q_collated, [], [], []), (d_collated, [], [], [], [], []) # To match the output format of TMRL
 
         all_query_list_str = [f[0] for f in features]
         all_query_temporal_list_list_str = [f[1] for f in features]
 
         all_passages_str = []
         all_passages_temporal_list_list_str = []
-        all_passages_temporal_query_type_list_str = []
-        all_passages_allen_relation_list_str = []
+        # all_passages_temporal_query_type_list_str = []
+        # all_passages_allen_relation_list_str = []
 
         for f in features:
             for p in f[2]:
                 all_passages_str.append(p[0])
                 all_passages_temporal_list_list_str.append(p[1])
-                all_passages_temporal_query_type_list_str.append(p[2])
-                all_passages_allen_relation_list_str.append(p[3])
+                # all_passages_temporal_query_type_list_str.append(p[2])
+                # all_passages_allen_relation_list_str.append(p[3])
 
         query_char_spans_list, query_span_counts_list = self.get_temporal_char_spans(
             all_query_list_str, all_query_temporal_list_list_str
@@ -547,19 +548,20 @@ class TemporalReconCollator(TrainCollator):
             pt_collated_list,
             passage_temporal_token_spans_list,
             passage_temporal_tokens_input_ids_list,
-            torch.as_tensor(
-                [
-                    temporal_query_type_class_id[x]
-                    for x in all_passages_temporal_query_type_list_str
-                ]
-            ) if pt != [] else []
-            ,
-            torch.as_tensor(
-                [
-                    allen_relation_class_id[x]
-                    for x in all_passages_allen_relation_list_str
-                ]
-            ) if pt != [] else [],
+            # torch.as_tensor(
+            #     [
+            #         temporal_query_type_class_id[x]
+            #         for x in all_passages_temporal_query_type_list_str
+            #     ]
+            # ) if pt != [] else []
+            # ,
+            # torch.as_tensor(
+            #     [
+            #         allen_relation_class_id[x]
+            #         for x in all_passages_allen_relation_list_str
+            #     ]
+            # ) if pt != [] else [],
+            [], []
         )
 
     def get_temporal_token_spans(

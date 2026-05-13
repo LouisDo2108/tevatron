@@ -50,6 +50,8 @@ def main():
     backbone = cfg["checkpoint"]
     output_dir = OUTPUT_ROOT / data_name / MODEL_NAME / backbone
     output_dir.mkdir(parents=True, exist_ok=True)
+    
+    cfg['matryoshka_dim'] = 64
 
     # === COMMANDS ===
     encode_corpus_cmd = f"""

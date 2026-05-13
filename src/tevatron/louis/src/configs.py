@@ -38,7 +38,7 @@ configs = {
         padding_side="right",
         adaptor_dim="768",
         matryoshka_dim="768",
-        matryoshka_dim_list=[64, 128, 256, 512, 768],
+        matryoshka_dim_list=[64, 768], # [64, 128, 256, 512, 768],
         temperature="0.05",
     ),
     "gte": dict(

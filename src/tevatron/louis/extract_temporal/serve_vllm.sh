@@ -1,1 +1,0 @@
-vllm serve meta-llama/Llama-3.1-8B-Instruct --tensor-parallel-size 1 --max_model_len 4096 --gpu-memory-utilization 0.5 

@@ -1,0 +1,354 @@
+import argparse
+from pathlib import Path
+from pdb import set_trace as st
+from tevatron.louis.src.configs import configs
+from tevatron.louis.src.utils import run
+
+
+def main():
+    """Main entry for temporal retriever training and evaluation."""
+    parser = argparse.ArgumentParser(description="Temporal Retriever Training Pipeline")
+    parser.add_argument(
+        "--model",
+        required=True,
+        type=str,
+        help="Model name, e.g. bge | bgem3 | contriever | gte | nomic | qwen3",
+    )
+    parser.add_argument(
+        "--method_name",
+        default="tmrl",
+        type=str,
+        help="Method name, e.g. tmrl, madaptor, tempretriever, ts-retriever, zero-shot, lora, mrl",
+    )
+    parser.add_argument("--exp_name", default="dev", type=str)
+    parser.add_argument(
+        "--data",
+        default="temporal_nobel_prize",
+        help="Dataset name",
+    )
+    parser.add_argument("--enhanced_temporal", action="store_true", help="Use this flag only for temporal_nobel_prize dataset to train on our enhanced temporal queries.")
+    parser.add_argument("--eval", action="store_true", help="Eval with the corresponding dev set and also save the best model with the eval loss.", default=False)
+    parser.add_argument("--lora", action="store_true", help="Use LoRA for training.", default=False)
+    parser.add_argument("--lora_r", default=4, type=int)
+    parser.add_argument("--lora_alpha", default=4, type=int)
+
+    parser.add_argument("--lr", default=1e-4, type=float)
+    parser.add_argument("--batch_size", default=256, type=int)
+    parser.add_argument("--eval_batch_size", default=512, type=int)
+    parser.add_argument("--epoch", default=5, type=int)
+    parser.add_argument("--gradient_accumulation_steps", default=1, type=int)
+    parser.add_argument("--wandb", action="store_true", default=False)
+    parser.add_argument("--gradient_checkpointing", action="store_true", default=False)
+    parser.add_argument("--num_neg", default=4, type=int)
+    parser.add_argument("--qt", default=0.0, type=float)
+    parser.add_argument("--pt", default=0.0, type=float)
+    parser.add_argument("--qt_recon", default=0.0, type=float)
+    parser.add_argument("--pt_recon", default=0.0, type=float)
+    parser.add_argument("--temporal_dim", default=64, type=int)
+    parser.add_argument("--max_temporal_length", default=16, type=int)
+    parser.add_argument("--temporal", action="store_true", default=False)
+    parser.add_argument("--temporal_reconstruction", action="store_true", default=False)
+    parser.add_argument("--filter_false_negatives", action="store_true", default=False)
+    parser.add_argument("--kl_loss", action="store_true", default=False)
+    parser.add_argument("--add_cls", action="store_true", default=False)
+    parser.add_argument("--detach_temporal", action="store_true", default=False)
+    parser.add_argument("--distillation", default=0.0, type=float)
+    parser.add_argument("--l2_reg", default=0.0, type=float)
+    parser.add_argument("--cka_reg", default=0.0, type=float)
+    parser.add_argument("--new_cls", action="store_true", default=False)
+    parser.add_argument("--use_residual", action="store_true", default=False)
+    parser.add_argument(
+        "--matryoshka_dim_list",
+        type=int,
+        nargs="+",  # Accepts multiple integers
+        help="List of dimensions for Matryoshka representation, e.g. --matryoshka_dim_list 256 512 768",
+    )
+    parser.add_argument(
+        "--matryoshka_dim",
+        type=int,
+        default=None,
+    )
+
+    args = parser.parse_args()
+
+    # ==== PATHS ====
+    HOME = Path("/home/thuy0050")
+    CODE_DIR = HOME / "code" / "tevatron" / "src" / "tevatron"
+    DATA_ROOT = HOME / "mg61_scratch2" / "thuy0050" / "data" / "third_work"
+    OUTPUT_ROOT = HOME / "mg61_scratch2" / "thuy0050" / "exp" / "tevatron"
+    METHOD_NAME = args.method_name
+
+    data_name = args.data
+    exp_name = args.exp_name
+
+    # ==== ARGUMENTS ====
+    batch_size = args.batch_size
+    eval_batch_size = args.eval_batch_size if "qwen" not in args.model else 128
+    epoch = args.epoch if "nomic" not in args.model else 1 # Nomic only needs 1 epoch
+    grad_accum = args.gradient_accumulation_steps
+    grad_ckpt = "--gradient_checkpointing" if args.gradient_checkpointing else ""
+    wandb = "wandb" if args.wandb else "none"
+
+    # ==== MODEL CONFIG ====
+    model_name = args.model
+    if model_name not in configs:
+        raise ValueError(f"Unknown model: {model_name}")
+    cfg = configs[model_name]
+
+    backbone = cfg["checkpoint"]
+    output_dir = OUTPUT_ROOT / "time_sensitive_qa" / METHOD_NAME / backbone / exp_name
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    lora_train = ""
+    lora_eval = ""
+    if args.lora:
+        lora_train = f"--lora --lora_r {args.lora_r} --lora_alpha {args.lora_alpha} --lora_target_modules all-linear"
+        lora_eval = f"--lora_name_or_path {output_dir}"
+    
+    filter_false_negatives = ""
+    if args.filter_false_negatives:
+        filter_false_negatives = "--filter_false_negatives"
+
+    temporal = ""
+    if args.temporal:
+        temporal = "--temporal"
+
+    add_cls = ""
+    if args.add_cls:
+        add_cls = "--add_cls"
+        
+    enhanced_temporal = ""
+    if args.enhanced_temporal:
+        enhanced_temporal = "--enhanced_temporal"
+        
+    new_cls = ""
+    if args.new_cls:
+        new_cls = "--new_cls"
+    
+    kl_loss = ""
+    if args.kl_loss:
+        kl_loss = "--kl_loss"
+    
+    use_residual = ""
+    if args.use_residual:
+        use_residual = "--use_residual"
+        
+    detach_temporal = ""
+    if args.detach_temporal:
+        detach_temporal = "--detach_temporal"
+    
+    # No longer used
+    temporal_reconstruction = ""
+    if args.temporal_reconstruction:
+        temporal_reconstruction = "--temporal_reconstruction"
+
+    matryoshka_dim_list_str = ""
+    if not args.matryoshka_dim_list:
+        matryoshka_dim_list_str = " ".join([str(x) for x in cfg["matryoshka_dim_list"]])
+    else:
+        matryoshka_dim_list_str = " ".join([str(x) for x in args.matryoshka_dim_list])
+
+    matryoshka_dim = ""
+    if args.matryoshka_dim is not None:
+        matryoshka_dim = str(args.matryoshka_dim)
+    else:
+        matryoshka_dim = str(cfg["matryoshka_dim"])
+        
+    encode_file_name = "encode.py"
+    train_file_name = f"{CODE_DIR}/louis/src/train.py"
+    adaptor_dim = ""
+
+    if METHOD_NAME == "madaptor":
+        adaptor_dim = f"--adaptor_dim {cfg['adaptor_dim']}"
+        encode_file_name = "encode_madaptor.py"
+        filter_false_negatives = ""
+        lora_train = ""
+        lora_eval = ""
+        temporal = ""
+        args.distillation = 0.0
+        args.cka_reg = 0.0
+    elif METHOD_NAME == "tempretriever":
+        # encode_file_name = "encode_tempretriever_no_temporal.py"
+        encode_file_name = "encode_tempretriever.py"
+        
+        # Disable to test out the similar training setting as TMRL
+        # batch_size = 32
+
+        args.lr = 1e-5
+        filter_false_negatives = ""
+        lora_train = ""
+        lora_eval = ""
+        temporal = ""
+        args.distillation = 0.0
+        args.cka_reg = 0.0 
+        # To enable two encoders
+        kl_loss = "--kl_loss"
+        args.kl_loss = True
+        args.eval = False 
+        matryoshka_dim_list_str = str(cfg["matryoshka_dim"])
+    elif METHOD_NAME == "lora":
+        filter_false_negatives = ""
+        temporal = ""
+        args.distillation = 0.0
+        args.cka_reg = 0.0
+        matryoshka_dim_list_str = str(cfg["matryoshka_dim"])
+        train_file_name = f"{CODE_DIR}/retriever/driver/train.py"
+    elif METHOD_NAME == "ts-retriever":
+        # Disable to test out the similar training setting as TMRL
+        # args.num_neg = 1
+        # batch_size = 64
+        filter_false_negatives = ""
+        lora_train = ""
+        lora_eval = ""
+        temporal = ""
+        args.distillation = 0.0
+        args.cka_reg = 0.0 
+        matryoshka_dim_list_str = str(cfg["matryoshka_dim"])
+        train_file_name = f"{CODE_DIR}/retriever/driver/train.py"
+        
+    num_neg = args.num_neg + 1
+        
+    dataset_path = ""
+    if "no_equal" in data_name:
+        dataset_path = "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/time_sensitive_qa/allen/no_equals.jsonl"
+    if "no_temporal_answer" in data_name:
+        dataset_path = "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/time_sensitive_qa/allen/no_temporal_answer.jsonl"
+    if "no_meet-met" in data_name:
+        dataset_path = "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/time_sensitive_qa/allen/no_meet-met.jsonl"
+    if "no_start" in data_name:
+        dataset_path = "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/time_sensitive_qa/allen/no_start.jsonl"
+    if "no_finish" in data_name:
+        dataset_path = "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/time_sensitive_qa/allen/no_finish.jsonl"
+    if "no_overlap" in data_name:
+        dataset_path = "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/time_sensitive_qa/allen/no_overlap.jsonl"
+    if "no_contain-during" in data_name:
+        dataset_path = "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/time_sensitive_qa/allen/no_contain-during.jsonl"
+    if "no_before-after" in data_name:
+        dataset_path = "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/time_sensitive_qa/allen/no_before-after.jsonl"
+    if "tempretriever_data":
+        dataset_path = "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/temporal_nobel_prize/train/tempretriever_trainset_with_sutime_extracted_temporal.jsonl"
+    if "non_filtered":
+        dataset_path = "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/temporal/temporal_nobel_prize/archive_after_submission/train/train_enhanced_temporal_v2.jsonl"    
+    
+    eval_dataset_path = ""
+    if args.eval:
+        # eval_dataset_path = f"--eval_dataset_path {DATA_ROOT}/temporal/time_sensitive_qa/train/original/dev.jsonl --eval_on_start True --metric_for_best_model" + (" eval_recall@1" if "driver" in train_file_name else f" eval_recall@1_{matryoshka_dim}")
+        eval_dataset_path = f"--eval_dataset_path {DATA_ROOT}/temporal/temporal_nobel_prize/train/dev.jsonl --eval_on_start True --metric_for_best_model" + (" eval_recall@1" if "driver" in train_file_name else f" eval_recall@1_{matryoshka_dim}")
+    else:
+        eval_dataset_path = "--save_strategy epoch --load_best_model_at_end False"
+
+
+    # ==== COMMANDS ====
+    train_cmd = f"""
+    ulimit -n 8192 && \
+    python {train_file_name} \
+        --do_train \
+        --pooling {cfg['pooling']} \
+        --bf16 \
+        {cfg['normalize']} \
+        --train_group_size {num_neg} \
+        --per_device_train_batch_size {batch_size} \
+        --per_device_eval_batch_size {eval_batch_size} \
+        --learning_rate {args.lr} \
+        --temperature {cfg['temperature']} \
+        --num_train_epochs {epoch} \
+        --gradient_accumulation_steps {grad_accum} \
+        {lora_train} \
+        --dataset_name Tevatron/msmarco-passage \
+        --dataset_path {dataset_path} \
+        {eval_dataset_path} \
+        --method_name {METHOD_NAME} \
+        --model_name_or_path {backbone} \
+        --run_name {backbone}_{exp_name} \
+        --output_dir {output_dir} \
+        --report_to {wandb} \
+        --query_prefix {cfg['query_prefix']} \
+        --passage_prefix {cfg['passage_prefix']} \
+        --padding_side {cfg['padding_side']} \
+        --matryoshka_dim {matryoshka_dim} \
+        {grad_ckpt} \
+        {enhanced_temporal} \
+        {temporal} \
+        {temporal_reconstruction} \
+        --temporal_dim {args.temporal_dim} \
+        --pt {args.pt} \
+        --qt {args.qt} \
+        --pt_recon {args.pt_recon} \
+        --qt_recon {args.qt_recon} \
+        {filter_false_negatives} \
+        {add_cls} \
+        {detach_temporal} \
+        --distillation {args.distillation} \
+        --cka_reg {args.cka_reg} \
+        {new_cls} \
+        {use_residual} \
+        --matryoshka_dim_list {matryoshka_dim_list_str} \
+        {adaptor_dim} \
+        {kl_loss} > {output_dir}/train_log.txt
+    """
+
+    data_name = "temporal_nobel_prize"
+    encode_corpus_cmd = f"""
+    python {CODE_DIR}/retriever/driver/{encode_file_name} \
+        --per_device_eval_batch_size {eval_batch_size} \
+        --pooling {cfg['pooling']} \
+        --bf16 \
+        --normalize \
+        --dataset_name LouisDo2108/temporal-nobel-prize \
+        --dataset_config corpus \
+        --dataset_path {DATA_ROOT}/temporal/{data_name}/test/corpus.{"jsonl" if "nobel" in data_name else "parquet"} \
+        --encode_output_path {output_dir}/corpus_emb_{matryoshka_dim}.pkl \
+        --model_name_or_path {output_dir} \
+        {lora_eval} \
+        --query_prefix {cfg['query_prefix']} \
+        --passage_prefix {cfg['passage_prefix']} \
+        --padding_side {cfg['padding_side']} \
+        --matryoshka_dim {matryoshka_dim} \
+        {adaptor_dim}
+    """
+    encode_query_cmd = f"""
+    python {CODE_DIR}/retriever/driver/{encode_file_name} \
+        --per_device_eval_batch_size {eval_batch_size} \
+        --pooling {cfg['pooling']} \
+        --bf16 \
+        --normalize \
+        --encode_is_query \
+        --dataset_name LouisDo2108/temporal-nobel-prize \
+        --dataset_config query \
+        --dataset_path {DATA_ROOT}/temporal/{data_name}/test/query.{"jsonl" if "nobel" in data_name else "parquet"} \
+        --model_name_or_path {output_dir} \
+        {lora_eval} \
+        --encode_output_path {output_dir}/queries_emb_{matryoshka_dim}.pkl \
+        --query_prefix {cfg['query_prefix']} \
+        --passage_prefix {cfg['passage_prefix']} \
+        --padding_side {cfg['padding_side']} \
+        --matryoshka_dim {matryoshka_dim} \
+        {adaptor_dim}
+    """
+
+    retrieval_cmd = f"""
+    set -f && OMP_NUM_THREADS=16 python -m tevatron.retriever.driver.search \
+        --query_reps {output_dir}/queries_emb_{matryoshka_dim}.pkl \
+        --passage_reps {output_dir}/corpus_emb_{matryoshka_dim}.pkl \
+        --depth 100 \
+        --batch_size 2048 \
+        --save_text \
+        --save_ranking_to {output_dir}/rank.txt
+
+    && python -m tevatron.utils.format.convert_result_to_trec \
+        --input {output_dir}/rank.txt \
+        --output {output_dir}/rank.trec
+
+    && python -m pyserini.eval.trec_eval -c \
+        -m recall.10,100 -m ndcg_cut.10 -M 100 \
+        {DATA_ROOT}/temporal/{data_name}/test/qrel.txt \
+        {output_dir}/rank.trec > {output_dir}/out_{matryoshka_dim}.txt
+    """
+    # ==== EXECUTION ====
+    run([train_cmd])
+    run([encode_corpus_cmd, encode_query_cmd])
+    run([retrieval_cmd])
+
+
+if __name__ == "__main__":
+    main()

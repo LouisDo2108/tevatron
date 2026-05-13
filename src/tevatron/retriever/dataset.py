@@ -1,7 +1,6 @@
 import logging
 import os
 import random
-from typing import List, Tuple
 
 from datasets import load_dataset
 from PIL import Image
@@ -285,6 +284,7 @@ class EncodeDataset(Dataset):
 
     def __init__(self, data_args: DataArguments):
         self.data_args = data_args
+        print(self.data_args)
         self.encode_data = load_dataset(
             self.data_args.dataset_name,
             self.data_args.dataset_config,
@@ -298,11 +298,6 @@ class EncodeDataset(Dataset):
                 num_shards=self.data_args.dataset_number_of_shards,
                 index=self.data_args.dataset_shard_index,
             )
-            
-        # if self.data_args.dataset_config == "corpus":
-        #     logger.info(f"Number of samples in arguments: {data_args.num_samples}")
-        #     self.encode_data = self.encode_data.select(range(data_args.num_samples))
-        #     logger.info(f"Number of samples in reality: {len(self.encode_data)}")
             
         self.passage_prefix = self.data_args.passage_prefix.replace("\\n", "\n").strip()
         if self.passage_prefix != "":

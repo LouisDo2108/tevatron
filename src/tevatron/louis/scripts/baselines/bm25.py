@@ -10,76 +10,7 @@ from typing import Union, List, Optional
 import pandas as pd
 import bm25s
 import Stemmer  # optional: for stemming
-
-# Compile once at module load time for speed
-_WHITESPACE_RE = re.compile(r"\s+")
-
-
-def read_json(file_path, jsonl=False):
-    file_path = Path(file_path)
-    if not file_path.is_file():
-        raise ValueError("filepath is not a file")
-    # if not file_path.suffix == ".jsonl" and jsonl:
-    #     raise ValueError("the file is not jsonl")
-    # if not file_path.suffix == ".json" and not jsonl:
-    #     raise ValueError("the file is not json")
-    file_path = file_path.__str__()
-
-    output = []
-
-    with open(file_path, "rb") as file:
-        data = file.read()
-        if jsonl:
-            output = decoder.decode_lines(data)
-        else:
-            output = decoder.decode(data)
-
-    print(f"The file is of type: {type(output)}")
-    print(f"The file contains {len(output)} items.")
-    return output
-
-
-def normalize_cmd(cmd: str) -> str:
-    """Normalize whitespace and remove newlines in a shell command."""
-    cmd = _WHITESPACE_RE.sub(" ", cmd.strip())
-    cmd = cmd.replace("\n", " ")
-    return cmd
-
-
-def run(
-    cmd: Union[str, List[str]], env: Optional[dict] = None, dry_run: bool = False
-) -> None:
-    """
-    Run one or multiple shell commands safely.
-
-    Args:
-        cmd: A single command string or a list of commands.
-        env: Optional environment variables to pass to subprocess.
-        dry_run: If True, prints commands instead of executing them.
-    """
-    if isinstance(cmd, list):
-        cmd_list = [normalize_cmd(c) for c in cmd if c.strip()]
-        joined_cmd = " && ".join(cmd_list)
-    else:
-        joined_cmd = normalize_cmd(cmd)
-
-    # print(f"\n>>> Running:\n{joined_cmd}\n", flush=True)
-
-    if dry_run:
-        return
-
-    try:
-        # pprint(dict(os.environ))
-        pprint(joined_cmd)
-        subprocess.run(
-            joined_cmd, 
-            # timeout=15,
-            shell=True, check=True, env=dict(os.environ)
-        )
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Command failed with exit code {e.returncode}")
-        raise
-
+from tevatron.louis.src.utils import read_json, run
 
 encoder = msgspec.json.Encoder()
 decoder = msgspec.json.Decoder()

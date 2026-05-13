@@ -44,7 +44,7 @@ export PYTORCH_ALLOC_CONF=garbage_collection_threshold:0.6
 
 # Useful for pytorch debugging: torch.autograd.set_detect_anomaly(True)
 
-cd /home/thuy0050/code/tevatron/src/tevatron
+cd /home/thuy0050/code/TMRL/src/tevatron
 
 MODEL=$1
 DATA=$2

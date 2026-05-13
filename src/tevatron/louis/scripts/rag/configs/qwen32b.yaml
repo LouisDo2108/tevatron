@@ -1,0 +1,152 @@
+# ------------Global Paths------------#
+# Paths to various models
+model2path:
+  e5: "intfloat/e5-base-v2"
+  bge: "BAAI/bge-base-en-v1.5"
+  contriever: "facebook/contriever"
+  llama2-7B-chat: "meta-llama/Llama-2-7b-chat-hf"
+  llama2-7B: "meta-llama/Llama-2-7b-hf"
+  llama2-13B: "meta-llama/Llama-2-13b-hf"
+  llama2-13B-chat: "meta-llama/Llama-2-13b-chat-hf"
+  qwen3-0.6B: "Qwen/Qwen3-0.6B"
+  qwen3-8B: "Qwen/Qwen3-8B"
+  deepseek-r1-qwen32B: "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"
+  qwen3-32B: "Qwen/Qwen3-32B"
+
+# Pooling methods for each embedding model
+model2pooling:
+  e5: "mean"
+  bge: "cls"
+  contriever: "mean"
+  jina: "mean"
+  dpr: "pooler"
+
+# Indexes path for retrieval models
+method2index:
+  bge: ~
+  e5: ~
+  bm25: ~
+  contriever: ~
+  clip:
+    "text": "path/to/text_index"
+    "image": "path/to/image_index"
+
+# ------------Environment Settings------------#
+# Directory paths for data and outputs
+data_dir: "/home/thuy0050/mg61_scratch2/thuy0050/data/tmrl/temporal"
+save_dir: "/home/thuy0050/code/FlashRAG/louis/output"
+
+gpu_id: "0"
+dataset_name: "LouisDo2108/temporal-nobel-prize" # name of the dataset in data_dir
+split: ["test"] # dataset split to load (e.g. train,dev,test)
+
+# Sampling configurations for testing
+test_sample_num: ~ # number of samples to test (only work in dev/test split), if None, test all samples
+random_sample: False # whether to randomly sample the test samples
+
+# Seed for reproducibility
+seed: 42 # 2024
+
+# Whether save intermediate data
+save_intermediate_data: True
+save_note: "experiment"
+
+# -------------Retrieval Settings------------#
+# If set the name, the model path will be find in global paths
+retrieval_method: "bge" # name or path of the retrieval model.
+retrieval_model_path: ~ # path to the retrieval model
+index_path: ~ # set automatically if not provided.
+multimodal_index_path_dict: ~ # use for multimodal retreiver, example format: {'text': 'path/to/text_index' or None, 'image': 'path/to/image_index' or None}
+faiss_gpu: True # whether use gpu to hold index
+corpus_path: ~ # path to corpus in '.jsonl' format that store the documents
+
+instruction: ~ # instruction for the retrieval model
+retrieval_topk: 5 # number of retrieved documents
+retrieval_batch_size: 256 # batch size for retrieval
+retrieval_use_fp16: True # whether to use fp16 for retrieval model
+retrieval_query_max_length: 128 # max length of the query
+save_retrieval_cache: False # whether to save the retrieval cache
+use_retrieval_cache: False # whether to use the retrieval cache
+retrieval_cache_path: ~ # path to the retrieval cache
+retrieval_pooling_method: ~ # set automatically if not provided
+bm25_backend: bm25s # pyserini, bm25s
+use_sentence_transformer: False
+silent_retrieval: True # whether to silent the retrieval process
+
+seismic_query_cut: 10 # parameters for seismic. See seismic paper for full details
+seismic_heap_factor: 0.8 # parameters for seismic. See seismic paper for full details
+# -------------Reranker Settings------------#
+use_reranker: False # whether to use reranker
+rerank_model_name: ~ # same as retrieval_method
+rerank_model_path: ~ # path to reranker model, path will be automatically find in `model2path`
+rerank_pooling_method: ~
+rerank_topk: 5 # number of remain documents after reranking
+rerank_max_length: 512
+rerank_batch_size: 256 # batch size for reranker
+rerank_use_fp16: True
+
+# If you want to use multi retrievers, you can set the following parameters
+use_multi_retriever: False # whether to use multi retrievers
+multi_retriever_setting:
+  merge_method: "concat" # support 'concat', 'rrf', 'rerank'
+  topk: 5 # final remain documents, only used in 'rrf' and 'rerank' merge
+  rerank_model_name: ~
+  rerank_model_path: ~
+  retriever_list:
+    - retrieval_method: "e5"
+      retrieval_topk: 5
+      index_path: ~
+      retrieval_model_path: ~
+    - retrieval_method: "bm25"
+      retrieval_topk: 5
+      index_path: ~
+      retrieval_model_path: ~
+
+# -------------Generator Settings------------#
+framework: vllm # inference frame work of LLM, supporting: 'hf','vllm','fschat', 'openai'
+generator_model: "qwen3-32B" # name or path of the generator model
+# setting for openai model, only valid in openai framework
+
+# generator_max_input_len: 1024 # max length of the input
+
+# VLLM's LLM-specific
+max_num_batched_tokens: 16384 # For prefix fill, larger mean less kv cache
+max_num_seqs: 128 # Limit batch size
+max_model_len: 8192 # Limit context window
+enforce_eager: True # disable graph capturing completely if True
+
+# Qwen3-specific
+enable_thinking: False
+
+generation_params:
+  max_tokens: 8192 # 32768
+
+  ### Qwen enable_thinking=False ### 
+  temperature: 0.7
+  top_p: 0.8
+  top_k: 20
+  min_p: 0
+  ### Qwen enable_thinking=False ### 
+
+  # ### Qwen enable_thinking=True ### 
+  # enable_thinking: True
+  # temperature: 0.6
+  # top_p: 0.95
+  # top_k: 20
+  # min_p: 0
+  # ### Qwen enable_thinking=FalsTruee ### 
+
+
+use_fid: False # whether to use FID, only valid in encoder-decoder model
+gpu_memory_utilization: 0.9 # ratio of gpu's memory usage for generator
+
+# -------------Evaluation Settings------------#
+# Metrics to evaluate the result
+# metrics: ["em", "f1", "acc", "precision", "recall", "input_tokens"]
+metrics: ["em", "f1", "input_tokens"]
+
+# Specify setting for metric, will be called within certain metrics
+metric_setting:
+  retrieval_recall_topk: 5
+  tokenizer_name: "gpt-4"
+save_metric_score: True #　whether to save the metric score into txt file

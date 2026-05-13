@@ -103,7 +103,7 @@ def run(
 
 
 def set_seed(seed: int, deterministic: bool = True):
-    # Copy from transformers.trainer_utilss.set_seed with some modifications
+    # Copy from transformers.trainer_utils.set_seed with some modifications
     """
     Helper function for reproducible behavior to set the seed in `random`, `numpy`, `torch` and/or `tf` (if installed).
 
@@ -113,8 +113,17 @@ def set_seed(seed: int, deterministic: bool = True):
         deterministic (`bool`, *optional*, defaults to `False`):
             Whether to use deterministic algorithms where available. Can slow down training.
     """
+    
+    import random
+    import numpy as np
+    import torch
+    
     random.seed(seed)
     np.random.seed(seed)
+    # Python Hashing (affects dict/set ordering)
+    
+    # os.environ["PYTHONHASHSEED"] = str(seed)
+    
     if is_torch_available():
         torch.manual_seed(seed)
         torch.cuda.manual_seed(seed)
@@ -131,6 +140,10 @@ def set_seed(seed: int, deterministic: bool = True):
             # # Enable CUDNN deterministic mode
             # torch.backends.cudnn.deterministic = True
             # torch.backends.cudnn.benchmark = False
+            # torch.backends.cudnn.enabled = False # Optional: disables CuDNN entirely for max determinism
+    else:
+        torch.manual_seed(seed)
+    print(f"Global seed set to {seed}. Deterministic mode: {deterministic}")
 
 
 def write_json(file_path, data, jsonl=False):

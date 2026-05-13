@@ -4,19 +4,24 @@ from copy import deepcopy
 from dataclasses import asdict
 from pathlib import Path
 from pdb import set_trace as st
-import random
 
 import wandb
-from tevatron.louis.src.collator import TemporalReconCollator, TempRetrieverCollator
-from tevatron.louis.src.dataset import TemporalDataset
-from tevatron.louis.src.models import TemporalProjectorReconstruction, MAdaptor, TempRetriever
-from tevatron.louis.src.trainer import MAdaptorTrainer as Trainer
-from tevatron.retriever.collator import TrainCollator
 from transformers import AutoConfig, AutoTokenizer
-from tevatron.louis.src.utils import get_params_info, init, write_json
-from tevatron.retriever.arguments import DataArguments
-from datasets import load_dataset
 
+from tevatron.louis.src.collator import TemporalReconCollator, TempRetrieverCollator
+from tevatron.louis.src.dataset import TemporalDataset, TempRetrieverTemporalDataset
+from tevatron.louis.src.models import (
+    DenseModel,
+    NaiveTemporal,
+    MAdaptor,
+    MRL,
+    TemporalProjectorReconstruction,
+    TempRetriever,
+)
+from tevatron.louis.src.trainer import MAdaptorTrainer as Trainer
+# from tevatron.retriever.trainer import Trainer
+from tevatron.louis.src.utils import get_params_info, init, write_json
+from tevatron.retriever.collator import TrainCollator
 from tevatron.retriever.dataset import TrainDataset
 
 logger = logging.getLogger(__name__)
@@ -51,9 +56,12 @@ def get_tokenizer(model_args, data_args):
 
 
 MODEL_CLS_DICT = {
-    "temporal": TemporalProjectorReconstruction,
+    "tmrl": TemporalProjectorReconstruction,
+    "mrl": MRL,
     "madaptor": MAdaptor,
     "tempretriever": TempRetriever,
+    "ts-retriever": NaiveTemporal,
+    "tsm": NaiveTemporal,
 }
 
 
@@ -61,11 +69,11 @@ def main():
     model_args, data_args, training_args = init()
 
     default_config, tokenizer = get_tokenizer(model_args, data_args)
-    
+
     if training_args.method_name == "tempretriever":
-        train_dataset = TemporalDataset(data_args)
+        train_dataset = TempRetrieverTemporalDataset(data_args)
         collator = TempRetrieverCollator(data_args, tokenizer)
-    elif training_args.enhanced_temporal:
+    elif training_args.method_name == "tmrl":
         train_dataset = TemporalDataset(data_args)
         collator = TemporalReconCollator(
             data_args, tokenizer, max_temporal_length=training_args.max_temporal_length
@@ -101,8 +109,9 @@ def main():
     elif method_name == "tempretriever":
         for k, v in model.named_parameters():
             v.requires_grad = True
-            
-        def get_params_info(model):
+
+    if method_name == "tempretriever":
+        def get_params_info_v2(model):
             all_param = 0
             trainable_param = 0
 
@@ -117,7 +126,9 @@ def main():
             print(
                 f"trainable params: {trainable_param:,} || all params: {all_param:,} || trainable%: {trainable_param / all_param * 100:.2f}"
             )
-    get_params_info(model)
+        get_params_info_v2(model)
+    else:
+        get_params_info(model)
 
     trainer = Trainer(
         model=model,
@@ -126,7 +137,7 @@ def main():
         eval_dataset=eval_dataset,
         data_collator=collator,
     )
-    
+
     if method_name == "madaptor":
         try:
             if hasattr(trainer, 'madaptor'):

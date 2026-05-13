@@ -170,7 +170,6 @@ class TempRetrieverTemporalDataset(TrainDataset):
         self.trainer = trainer
         self.sutime_parsing = sutime_parsing
 
-        # Load training data
         self.train_data = load_dataset(
             self.data_args.dataset_name if dataset_name is None else dataset_name,
             self.data_args.dataset_config,

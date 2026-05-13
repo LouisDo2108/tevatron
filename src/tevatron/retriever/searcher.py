@@ -23,7 +23,8 @@ class FaissFlatSearcher:
         num_query = q_reps.shape[0]
         all_scores = []
         all_indices = []
-        for start_idx in tqdm(range(0, num_query, batch_size), disable=quiet):
+        # for start_idx in tqdm(range(0, num_query, batch_size), disable=quiet):
+        for start_idx in range(0, num_query, batch_size):
             nn_scores, nn_indices = self.search(q_reps[start_idx: start_idx + batch_size], k)
             all_scores.append(nn_scores)
             all_indices.append(nn_indices)
@@ -31,6 +32,9 @@ class FaissFlatSearcher:
         all_indices = np.concatenate(all_indices, axis=0)
 
         return all_scores, all_indices
+
+    def save_index(self, path):
+        faiss.write_index(self.index, path)
 
 
 class FaissSearcher(FaissFlatSearcher):

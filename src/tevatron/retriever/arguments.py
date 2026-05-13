@@ -97,7 +97,7 @@ class DataArguments:
     )
 
     dataset_cache_dir: Optional[str] = field(
-        default=None,# "/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/tevatron",
+        default=None,
         metadata={
             "help": "Where do you want to store the data downloaded from huggingface"
         },
@@ -112,7 +112,7 @@ class DataArguments:
     )
 
     corpus_path: str = field(
-        default="/home/thuy0050/mg61_scratch2/thuy0050/data/third_work/tevatron",
+        default=None,
         metadata={"help": "Path to local corpus files or directory"},
     )
 
@@ -205,7 +205,7 @@ class DataArguments:
         metadata={"help": "padding side for the tokenizer, can be 'left' or 'right'"}
     )
     eval_dataset_path: str = field(default=None)  # type:ignore
-    num_samples: int = field(default=50_000)
+    # num_samples: int = field(default=50_000)
 
 
 @dataclass
@@ -233,8 +233,8 @@ class TevatronTrainingArguments(TrainingArguments):
         },
     )
     method_name: str = field(
-        default="temporal", 
-        metadata={"help": "Method name, e.g. temporal, madaptor, tempretriever, ts-retriever, zero-shot"}
+        default="tmrl", 
+        metadata={"help": "Method name, e.g. tmrl, madaptor, tempretriever, ts-retriever, zero-shot, lora, mrl"}
     )
     modules_to_save: List[str] = field(default_factory=lambda: [])
 

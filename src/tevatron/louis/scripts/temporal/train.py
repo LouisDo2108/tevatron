@@ -77,8 +77,8 @@ def main():
 
     # ==== PATHS ====
     HOME = Path("/home/thuy0050")
-    CODE_DIR = HOME / "code" / "tevatron" / "src" / "tevatron"
-    DATA_ROOT = HOME / "mg61_scratch2" / "thuy0050" / "data" / "third_work"
+    CODE_DIR = HOME / "code" / "TMRL" / "src" / "tevatron"
+    DATA_ROOT = HOME / "mg61_scratch2" / "thuy0050" / "data" / "tmrl"
     OUTPUT_ROOT = HOME / "mg61_scratch2" / "thuy0050" / "exp" / "tevatron"
     METHOD_NAME = args.method_name
 
@@ -89,7 +89,6 @@ def main():
     batch_size = args.batch_size
     eval_batch_size = args.eval_batch_size if "qwen" not in args.model else 128
     epoch = args.epoch if "nomic" not in args.model else 1 # Nomic only needs 1 epoch
-    num_neg = args.num_neg + 1
     grad_accum = args.gradient_accumulation_steps
     grad_ckpt = "--gradient_checkpointing" if args.gradient_checkpointing else ""
     wandb = "wandb" if args.wandb else "none"
@@ -109,7 +108,7 @@ def main():
     if args.lora:
         lora_train = f"--lora --lora_r {args.lora_r} --lora_alpha {args.lora_alpha} --lora_target_modules all-linear"
         lora_eval = f"--lora_name_or_path {output_dir}"
-        
+
     encode_file_name = "encode.py"
     train_file_name = "train.py"
     adaptor_dim = ""
@@ -121,19 +120,28 @@ def main():
     elif METHOD_NAME == "tempretriever":
         encode_file_name = "encode_tempretriever_no_temporal.py"
         # train_file_name = "train_tempretriever.py"
-        num_neg = 4
-        batch_size = 32
+        args.num_neg = 4
+        batch_size = 32  # 256
+        args.kl_loss = True
         args.lr = 1e-5
         lora_train = ""
         lora_eval = ""
     elif METHOD_NAME == "ts-retriever":
-        num_neg = 1
+        args.num_neg = 1
         batch_size = 64
         lora_train = ""
         lora_eval = ""
+    elif METHOD_NAME == "tsm":
+        args.num_neg = 5
+        batch_size = 64
+        lora_train = ""
+        lora_eval = ""
+        cfg['temperature'] = 1.0
     else:
         encode_file_name = "encode.py"
         train_file_name = "train.py"
+
+    num_neg = args.num_neg + 1
 
     filter_false_negatives = ""
     if args.filter_false_negatives:
@@ -142,7 +150,7 @@ def main():
     temporal = ""
     if args.temporal:
         temporal = "--temporal"
-    
+
     # No longer used
     temporal_reconstruction = ""
     if args.temporal_reconstruction:
@@ -159,14 +167,29 @@ def main():
         matryoshka_dim = str(args.matryoshka_dim)
     else:
         matryoshka_dim = str(cfg["matryoshka_dim"])
-        
+
     dataset_path = ""
     if data_name == "temporal_nobel_prize":
         if args.enhanced_temporal:
             dataset_path = f"{DATA_ROOT}/temporal/temporal_nobel_prize/train/train.jsonl"
         else:
             if METHOD_NAME == "tempretriever":
-                dataset_path = f"{DATA_ROOT}/temporal/temporal_nobel_prize/train/tempretriever/tempretriever_trainset_with_sutime_extracted_temporal.jsonl"
+                dataset_path = f"{DATA_ROOT}/temporal/temporal_nobel_prize/train/tempretriever_trainset_with_sutime_extracted_temporal.jsonl"
+            elif METHOD_NAME == "tsm":
+                if exp_name == "single_year_in":
+                    dataset_path = "/home/thuy0050/mg61_scratch2/thuy0050/data/tmrl/temporal/temporal_nobel_prize/train/tsm_traindev/train_single_year_in_6144.jsonl"
+                if exp_name == "range_from_to":
+                    dataset_path = "/home/thuy0050/mg61_scratch2/thuy0050/data/tmrl/temporal/temporal_nobel_prize/train/tsm_traindev/train_range_from_to_9146.jsonl"
+                if exp_name == "range_between_and":
+                    dataset_path = "/home/thuy0050/mg61_scratch2/thuy0050/data/tmrl/temporal/temporal_nobel_prize/train/tsm_traindev/train_range_between_and_4939.jsonl"
+                if exp_name == "before":
+                    dataset_path = "/home/thuy0050/mg61_scratch2/thuy0050/data/tmrl/temporal/temporal_nobel_prize/train/tsm_traindev/train_before_1000.jsonl"
+                if exp_name == "after":
+                    dataset_path = "/home/thuy0050/mg61_scratch2/thuy0050/data/tmrl/temporal/temporal_nobel_prize/train/tsm_traindev/train_after_4374.jsonl"
+                if exp_name == "early":
+                    dataset_path = "/home/thuy0050/mg61_scratch2/thuy0050/data/tmrl/temporal/temporal_nobel_prize/train/tsm_traindev/train_early_21.jsonl"
+                if exp_name == "late":
+                    dataset_path = "/home/thuy0050/mg61_scratch2/thuy0050/data/tmrl/temporal/temporal_nobel_prize/train/tsm_traindev/train_late_14.jsonl"
             else:
                 dataset_path = f"{DATA_ROOT}/temporal/temporal_nobel_prize/train/original/train.jsonl"
     elif data_name == "time_sensitive_qa":
@@ -175,16 +198,36 @@ def main():
         else:
             if METHOD_NAME == "tempretriever":
                 raise ValueError("Currently, there is no TimeQA dataset with SUTIME extracted temporal information for Tempretriever training.")
+            elif METHOD_NAME == "tsm":
+                pass
             else:
-                dataset_path = f"{DATA_ROOT}/temporal/time_sensitive_qa/train/original/train.jsonl"
-        
+                dataset_path = f"{DATA_ROOT}/temporal/time_sensitive_qa/train/original/modified_train.jsonl"
+
     eval_dataset_path = ""
     if args.eval:
         if data_name == "temporal_nobel_prize":
-            if args.enhanced_temporal:
-                eval_dataset_path = f"--eval_dataset_path {DATA_ROOT}/temporal/temporal_nobel_prize/train/original/dev.jsonl --eval_on_start True --metric_for_best_model eval_recall@1_{matryoshka_dim}"
+            if METHOD_NAME == "tsm":
+                if exp_name == "single_year_in":
+                    eval_dataset_path = f"--eval_dataset_path {DATA_ROOT}/temporal/temporal_nobel_prize/train/tsm_traindev/dev_single_year_in_128.jsonl --eval_on_start True --metric_for_best_model eval_recall@1_{matryoshka_dim}"
+                if exp_name == "range_from_to":
+                    eval_dataset_path = f"--eval_dataset_path {DATA_ROOT}/temporal/temporal_nobel_prize/train/tsm_traindev/dev_range_from_to_227.jsonl --eval_on_start True --metric_for_best_model eval_recall@1_{matryoshka_dim}"
+                if exp_name == "range_between_and":
+                    eval_dataset_path = f"--eval_dataset_path /home/thuy0050/mg61_scratch2/thuy0050/data/tmrl/temporal/temporal_nobel_prize/train/tsm_traindev/dev_range_between_and_135.jsonl --eval_on_start True --metric_for_best_model eval_recall@1_{matryoshka_dim}"
+                if exp_name == "before":
+                    eval_dataset_path = f"--eval_dataset_path /home/thuy0050/mg61_scratch2/thuy0050/data/tmrl/temporal/temporal_nobel_prize/train/tsm_traindev/dev_before_23.jsonl --eval_on_start True --metric_for_best_model eval_recall@1_{matryoshka_dim}"
+                    pass
+                if exp_name == "after":
+                    eval_dataset_path = f"--eval_dataset_path /home/thuy0050/mg61_scratch2/thuy0050/data/tmrl/temporal/temporal_nobel_prize/train/tsm_traindev/dev_after_111.jsonl --eval_on_start True --metric_for_best_model eval_recall@1_{matryoshka_dim}"
+                if exp_name == "early":
+                    args.eval = False
+                    eval_dataset_path = "--save_strategy epoch --load_best_model_at_end False"
+                if exp_name == "late":
+                    args.eval = False
+                    eval_dataset_path = "--save_strategy epoch --load_best_model_at_end False"
+            # elif args.enhanced_temporal:
+            #     eval_dataset_path = f"--eval_dataset_path {DATA_ROOT}/temporal/temporal_nobel_prize/train/dev.jsonl --eval_on_start True --metric_for_best_model eval_recall@1_{matryoshka_dim}"
             else:
-                eval_dataset_path = f"--eval_dataset_path {DATA_ROOT}/temporal/temporal_nobel_prize/train/dev.jsonl --eval_on_start True --metric_for_best_model eval_recall@1_{matryoshka_dim}"
+                eval_dataset_path = f"--eval_dataset_path {DATA_ROOT}/temporal/temporal_nobel_prize/train/original/dev.jsonl --eval_on_start True --metric_for_best_model eval_recall@1_{matryoshka_dim}"
         else:
             eval_dataset_path = f"--eval_dataset_path {DATA_ROOT}/temporal/time_sensitive_qa/train/original/dev.jsonl --eval_on_start True --metric_for_best_model eval_recall@1_{matryoshka_dim}"
     else:
@@ -193,18 +236,25 @@ def main():
     add_cls = ""
     if args.add_cls:
         add_cls = "--add_cls"
-        
+
     new_cls = ""
     if args.new_cls:
         new_cls = "--new_cls"
-    
+
     use_residual = ""
     if args.use_residual:
         use_residual = "--use_residual"
-        
+
     detach_temporal = ""
     if args.detach_temporal:
-        detach_temporal = "--detach_temporal"
+        detach_temporal = "--detach_temporal"\
+            
+    kl_loss = ""
+    if args.kl_loss:
+        kl_loss = "--kl_loss"
+    enhanced_temporal = ""
+    if args.enhanced_temporal:
+        enhanced_temporal = "--enhanced_temporal"
 
     # ==== COMMANDS ====
     train_cmd = f"""
@@ -227,13 +277,16 @@ def main():
         {eval_dataset_path} \
         --model_name_or_path {backbone} \
         --run_name {backbone}_{exp_name} \
+        --method_name {METHOD_NAME} \
         --output_dir {output_dir} \
         --report_to {wandb} \
         --query_prefix {cfg['query_prefix']} \
         --passage_prefix {cfg['passage_prefix']} \
         --padding_side {cfg['padding_side']} \
         --matryoshka_dim {matryoshka_dim} \
+        {kl_loss} \
         {grad_ckpt} \
+        {enhanced_temporal} \
         {temporal} \
         {temporal_reconstruction} \
         --temporal_dim {args.temporal_dim} \
@@ -251,8 +304,8 @@ def main():
         {use_residual} \
         --matryoshka_dim_list {matryoshka_dim_list_str} \
         {adaptor_dim}
-        > {output_dir}/train_log.txt
     """
+    # > {output_dir}/train_log.txt
 
     encode_corpus_cmd = f"""
     python {CODE_DIR}/retriever/driver/{encode_file_name} \

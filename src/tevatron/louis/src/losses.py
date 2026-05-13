@@ -1,8 +1,6 @@
 import torch
-import torch.nn.functional as F
 from torch import nn
-from pdb import set_trace as st
-from tevatron.louis.src.utils import norm
+import torch.nn.functional as F
 
 
 class ReconstructionLoss(nn.Module):
@@ -127,50 +125,6 @@ class RankLoss(nn.Module):
             partial_losses[f"loss_rank_partial_{m}"] = loss.mean().detach().clone()
 
             total_loss += loss.mean()
-
-        return total_loss, partial_losses
-
-
-class TemporalLoss(PairwiseSimilarityLossBase):
-
-    def compute_similarity(self, q_reps, p_reps):
-        return torch.matmul(
-            F.normalize(q_reps, p=2, dim=-1),
-            F.normalize(p_reps, p=2, dim=-1).transpose(0, 1),
-        )
-
-    def forward(
-        self,
-        temporal_embeddings,
-        adapted_temporal_embeddings,
-        adapted_embeddings,
-        temp_dim=256,
-        base_dim=768,
-    ):
-        total_loss = 0.0
-        partial_losses = {}
-
-        sim_target = self.compute_similarity_matrix(temporal_embeddings)
-        sim_adapted = self.compute_similarity_matrix(
-            adapted_temporal_embeddings[:, base_dim-temp_dim:]
-        )
-        pairwiseloss = torch.abs(sim_target - sim_adapted).mean()
-        total_loss += pairwiseloss
-        partial_losses["loss_pairwise_temporal"] = pairwiseloss.detach().clone()
-
-        recon_loss = torch.abs(temporal_embeddings - adapted_temporal_embeddings).mean()
-
-        # total_loss += recon_loss
-        # partial_losses["loss_rec_temporal"] = recon_loss.detach().clone()
-
-        # Should align with the adapted semantic embeddings
-        semantic_temporal_alignment_loss = 0.1 * torch.abs(
-            self.compute_similarity_matrix(adapted_embeddings)[:, : base_dim - temp_dim] - sim_adapted,
-        ).mean()
-        total_loss += semantic_temporal_alignment_loss
-        partial_losses["loss_semantic_temporal_alignment"] = (
-            semantic_temporal_alignment_loss.detach().clone()
-        )
 
         return total_loss, partial_losses
 
